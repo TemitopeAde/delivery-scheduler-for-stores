@@ -33,6 +33,8 @@ export const MESSAGES_EN = {
   'selection.confirmed': 'Selected: {date}, {time}',
   'selection.confirmedDateOnly': 'Selected: {date}',
   'selection.change': 'Change',
+  'selection.remove': 'Remove selection',
+  'selection.removed': 'Your delivery time selection was removed.',
   'selection.expiresSoon': 'We’ll hold this time for {minutes} minutes.',
   'pickup.location': 'Pickup from {location}',
   'reason.closed': 'Closed',

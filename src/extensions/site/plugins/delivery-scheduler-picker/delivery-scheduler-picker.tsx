@@ -60,8 +60,8 @@ type DeliverySchedulerPickerProps = {
   checkoutUpdatedDate?: string;
   deliveryStepState?: string;
   slotBrand?: unknown;
-  onRefreshCheckout?: unknown;
-  disableContinueButton?: unknown;
+  onRefreshCheckout?: () => void | Promise<void>;
+  disableContinueButton?: (disabled: boolean) => void;
 };
 
 type VmUpdate = ViewModel | null | ((current: ViewModel | null) => ViewModel | null);
@@ -119,7 +119,7 @@ const DeliverySchedulerPicker = ({
   }, []);
 
   const load = useCallback(
-    async (method: FulfilmentMethod | null, from?: string) => {
+    async (method: FulfilmentMethod | null, from?: string, preserveSelection = true) => {
       const checkoutIdValue = propsRef.current.checkoutId;
       if (!checkoutIdValue) return;
       const seq = ++loadSeqRef.current;
@@ -185,7 +185,9 @@ const DeliverySchedulerPicker = ({
         const hold = payload.currentHold;
         const resolvedMethod = payload.availability?.method ?? null;
         const keepDate =
-          previous?.selectedDate && previous.method === resolvedMethod ? previous.selectedDate : null;
+          preserveSelection && previous?.selectedDate && previous.method === resolvedMethod
+            ? previous.selectedDate
+            : null;
         const selectedDate = keepDate ?? hold?.localDate ?? null;
         const firstOpen = payload.availability?.days.find((day) => day.available)?.date;
         setLoadError(false);
@@ -197,10 +199,10 @@ const DeliverySchedulerPicker = ({
             previous && from
               ? previous.month
               : monthOf(selectedDate ?? firstOpen ?? payload.availability?.today ?? '1970-01'),
-          focusedDate: previous?.focusedDate ?? selectedDate,
+          focusedDate: preserveSelection ? previous?.focusedDate ?? selectedDate : selectedDate,
           selectedDate,
           hold,
-          editing: previous?.editing ?? false,
+          editing: preserveSelection ? previous?.editing ?? false : true,
           errorKey: previous?.errorKey ?? null,
           compact: false,
           brand: isBrand(propsRef.current.slotBrand) ? propsRef.current.slotBrand : null,
@@ -283,6 +285,51 @@ const DeliverySchedulerPicker = ({
     [announce, load, update],
   );
 
+  const release = useCallback(async () => {
+    const current = vmRef.current;
+    const checkoutIdValue = propsRef.current.checkoutId;
+    const reservationId = current?.hold?.reservationId;
+    if (!current || !checkoutIdValue || !reservationId || current.status === 'saving') return;
+    update({ status: 'saving', errorKey: null });
+    try {
+      const url = new URL('/api/reservations/release', APP_ORIGIN);
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      try {
+        const response = await httpClient.fetchWithAuth(url, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ checkoutId: checkoutIdValue, reservationId }),
+        });
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          const code =
+            body && typeof body === 'object' && 'error' in body
+              ? String((body as { error?: { code?: unknown } }).error?.code ?? 'INTERNAL')
+              : 'INTERNAL';
+          throw new WidgetApiError(code, response.status);
+        }
+        widgetLog('release:success', { checkoutId: shortId(checkoutIdValue), reservationId });
+      } catch (error) {
+        if (error instanceof WidgetApiError) throw error;
+        throw new WidgetApiError(controller.signal.aborted ? 'TIMEOUT' : 'NETWORK', 0);
+      } finally {
+        window.clearTimeout(timer);
+      }
+      announce(current.payload.messages['selection.removed']);
+      await load(current.method, undefined, false);
+    } catch (error) {
+      const code = error instanceof WidgetApiError ? error.code : 'INTERNAL';
+      widgetLog('release:error', {
+        checkoutId: shortId(checkoutIdValue),
+        reservationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      update({ status: 'ready', errorKey: ERROR_KEYS[code] ?? 'error.generic' });
+    }
+  }, [announce, load, update]);
+
   const selectDate = useCallback(
     (date: string) => {
       const current = vmRef.current;
@@ -341,6 +388,9 @@ const DeliverySchedulerPicker = ({
         case 'slot':
           if (current?.selectedDate && target.dataset.slot) void hold(current.selectedDate, target.dataset.slot);
           return;
+        case 'remove':
+          void release();
+          return;
         case 'prev-month':
           changeMonth(-1);
           return;
@@ -355,7 +405,7 @@ const DeliverySchedulerPicker = ({
           return;
       }
     },
-    [changeMonth, hold, load, selectDate, setVm, update],
+    [changeMonth, hold, load, release, selectDate, setVm, update],
   );
 
   const handleKeyDown = useCallback(
@@ -459,8 +509,12 @@ const DeliverySchedulerPicker = ({
     try {
       const continueControl = propsRef.current.disableContinueButton;
       if (typeof continueControl === 'function') {
-        (continueControl as (disabled: boolean) => void)(blocked);
-        widgetLog('continue-button', { checkoutId: shortId(checkoutId), disabled: blocked });
+        continueControl(blocked);
+        widgetLog('continue-button', {
+          checkoutId: shortId(checkoutId),
+          disabled: blocked,
+          functionArity: continueControl.length,
+        });
       }
     } catch (error) {
       console.error('Delivery Scheduler: continue-button control failed', error);
@@ -512,7 +566,7 @@ export default reactToWebComponent(DeliverySchedulerPicker, React, ReactDOM, {
     checkoutUpdatedDate: 'string',
     deliveryStepState: 'string',
     slotBrand: 'json',
-    onRefreshCheckout: 'function',
-    disableContinueButton: 'function',
+    onRefreshCheckout: 'method',
+    disableContinueButton: 'method',
   },
 });

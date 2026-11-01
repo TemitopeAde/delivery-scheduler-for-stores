@@ -178,9 +178,9 @@ function renderHeader(vm: ViewModel): string {
 
 function renderSummary(vm: ViewModel, hold: PublicHold, showChange: boolean): string {
   const m = vm.payload.messages;
-  return `<div class="ds-summary"><span>${e(holdTimeText(vm, hold))}</span>${
+  return `<div class="ds-summary"><span>${e(holdTimeText(vm, hold))}</span><span class="ds-row">${
     showChange ? `<button type="button" class="ds-link" data-action="change">${e(m['selection.change'])}</button>` : ''
-  }</div>`;
+  }<button type="button" class="ds-link" data-action="remove">${e(m['selection.remove'])}</button></span></div>`;
 }
 
 export function renderWidget(vm: ViewModel): string {
