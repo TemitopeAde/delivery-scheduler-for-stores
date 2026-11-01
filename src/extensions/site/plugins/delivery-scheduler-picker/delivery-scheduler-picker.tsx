@@ -30,6 +30,19 @@ class WidgetApiError extends Error {
 
 const API_TIMEOUT_MS = 12_000;
 const APP_ORIGIN = new URL(import.meta.url).origin;
+const WIDGET_LOG_PREFIX = '[Delivery Scheduler]';
+
+function widgetLog(event: string, fields: Record<string, unknown> = {}): void {
+  try {
+    console.info(`${WIDGET_LOG_PREFIX} ${event} ${JSON.stringify(fields)}`);
+  } catch {
+    console.info(`${WIDGET_LOG_PREFIX} ${event}`);
+  }
+}
+
+function shortId(value: string): string {
+  return value.length > 12 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+}
 
 function isBrand(value: unknown): value is SlotBrand {
   return !!value && typeof value === 'object' && 'backgroundColor' in value && 'textColor' in value;
@@ -110,6 +123,13 @@ const DeliverySchedulerPicker = ({
       const checkoutIdValue = propsRef.current.checkoutId;
       if (!checkoutIdValue) return;
       const seq = ++loadSeqRef.current;
+      widgetLog('availability:start', {
+        checkoutId: shortId(checkoutIdValue),
+        method,
+        from: from ?? null,
+        appOrigin: APP_ORIGIN,
+        seq,
+      });
       if (vmRef.current) update({ status: 'loading' });
       else setLoadError(false);
       try {
@@ -127,6 +147,13 @@ const DeliverySchedulerPicker = ({
             signal: controller.signal,
             headers: { 'Content-Type': 'application/json' },
           });
+          widgetLog('availability:response', {
+            checkoutId: shortId(checkoutIdValue),
+            status: response.status,
+            ok: response.ok,
+            url: url.toString(),
+            seq,
+          });
           const body: unknown = await response.json().catch(() => null);
           if (!response.ok) {
             const code =
@@ -136,6 +163,17 @@ const DeliverySchedulerPicker = ({
             throw new WidgetApiError(code, response.status);
           }
           payload = body as WidgetPayload;
+          widgetLog('availability:payload', {
+            checkoutId: shortId(checkoutIdValue),
+            enabled: payload.enabled,
+            required: payload.required,
+            method: payload.availability?.method ?? null,
+            methods: payload.methods?.map((item) => `${item.method}:${item.available}`).join(',') ?? '',
+            days: payload.availability?.days.length ?? 0,
+            availableDays: payload.availability?.days.filter((day) => day.available).length ?? 0,
+            settingsRevision: payload.settingsRevision,
+            seq,
+          });
         } catch (error) {
           if (error instanceof WidgetApiError) throw error;
           throw new WidgetApiError(controller.signal.aborted ? 'TIMEOUT' : 'NETWORK', 0);
@@ -169,6 +207,11 @@ const DeliverySchedulerPicker = ({
         });
       } catch (error) {
         if (seq !== loadSeqRef.current) return;
+        widgetLog('availability:error', {
+          checkoutId: shortId(checkoutIdValue),
+          error: error instanceof Error ? error.message : String(error),
+          seq,
+        });
         console.error('Delivery Scheduler: failed to load availability', error);
         if (vmRef.current) update({ status: navigator.onLine === false ? 'offline' : 'error' });
         else setLoadError(true);
@@ -357,6 +400,35 @@ const DeliverySchedulerPicker = ({
   }, [checkoutId, load]);
 
   useEffect(() => {
+    widgetLog('render', {
+      checkoutId: checkoutId ? shortId(checkoutId) : null,
+      deliveryStepState,
+      hasViewModel: !!vm,
+      loadError,
+      status: vm?.status ?? 'placeholder',
+      payloadEnabled: vm?.payload.enabled ?? null,
+      method: vm?.method ?? null,
+      hasAvailability: !!vm?.payload.availability,
+      days: vm?.payload.availability?.days.length ?? 0,
+      availableDays: vm?.payload.availability?.days.filter((day) => day.available).length ?? 0,
+      compact: !!vm && deliveryStepState === 'summary' && !!vm.hold,
+      renderBranch: !checkoutId
+        ? 'preview'
+        : !vm
+          ? loadError
+            ? 'load-error'
+            : 'loading-placeholder'
+          : !vm.payload.enabled
+            ? 'disabled-empty'
+            : deliveryStepState === 'summary' && vm.hold
+              ? vm.hold
+                ? 'compact-hold-summary'
+                : 'compact-empty'
+              : 'full-widget',
+    });
+  }, [checkoutId, deliveryStepState, loadError, vm]);
+
+  useEffect(() => {
     if (!checkoutUpdatedDate || checkoutUpdatedDate === lastUpdatedDateRef.current) return;
     const first = lastUpdatedDateRef.current === '';
     lastUpdatedDateRef.current = checkoutUpdatedDate;
@@ -380,15 +452,20 @@ const DeliverySchedulerPicker = ({
   }, [load, update]);
 
   useEffect(() => {
-    const current = vm;
-    const blocked = !!current && current.payload.enabled && current.payload.required && !current.hold;
+    // Keep checkout blocked while a required scheduler is loading. Enabling
+    // Continue before availability/hold resolution would allow an order to
+    // bypass the required schedule.
+    const blocked = !!checkoutId && (!vm || (vm.payload.enabled && vm.payload.required && !vm.hold));
     try {
       const continueControl = propsRef.current.disableContinueButton;
-      if (typeof continueControl === 'function') (continueControl as (disabled: boolean) => void)(blocked);
+      if (typeof continueControl === 'function') {
+        (continueControl as (disabled: boolean) => void)(blocked);
+        widgetLog('continue-button', { checkoutId: shortId(checkoutId), disabled: blocked });
+      }
     } catch (error) {
       console.error('Delivery Scheduler: continue-button control failed', error);
     }
-  }, [vm, disableContinueButton]);
+  }, [checkoutId, disableContinueButton, vm]);
 
   useEffect(() => {
     const selector = focusAfterRenderRef.current;
@@ -398,6 +475,10 @@ const DeliverySchedulerPicker = ({
   }, [vm, loadError, deliveryStepState]);
 
   const messages = resolveMessages(locale(), {});
+  // Keep the picker visible until the customer has selected a hold. Once a
+  // hold exists, Wix may render the delivery step in summary mode and the
+  // compact confirmation is appropriate.
+  const compact = !!vm && deliveryStepState === 'summary' && !!vm.hold;
   let html: string;
   if (!checkoutId) {
     html = renderPreviewHtml(DEFAULT_SETTINGS, locale());
@@ -411,7 +492,7 @@ const DeliverySchedulerPicker = ({
     html = renderWidget({
       ...vm,
       brand: isBrand(slotBrand) ? slotBrand : null,
-      compact: deliveryStepState === 'summary',
+      compact,
     });
   }
 

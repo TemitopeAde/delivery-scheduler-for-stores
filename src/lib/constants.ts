@@ -20,7 +20,7 @@ export const WIX_STORES_APP_ID = '215238eb-22a5-4c36-9e7b-e7c08025e04e';
 export const CHECKOUT_PLUGIN_PLACEMENT = {
   appDefinitionId: '1380b703-ce81-ff05-f115-39571d94dfcd',
   widgetId: '14fd5970-8072-c276-1246-058b79e70c1a',
-  slotId: '14fd5970-8072-c276-1246-058b79e70c1a:checkout:steps:deliveryMethod',
+  slotId: 'checkout:delivery-step:options:after',
 } as const;
 
 /** Site plugin extension ID (from delivery-scheduler-picker.extension.ts). */

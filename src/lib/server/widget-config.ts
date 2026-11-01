@@ -8,6 +8,7 @@ import { resolveCheckout } from './checkout-context';
 import { currentHold, type PublicHold } from './holds';
 import { loadUsage } from './lock-store';
 import { isSchedulingRequired, loadSchedulingContext } from './scheduling-context';
+import { log } from './log';
 
 export interface WidgetPayload {
   enabled: boolean;
@@ -41,6 +42,7 @@ export async function widgetPayload(args: {
   locale?: string | undefined;
 }): Promise<WidgetPayload> {
   const now = new Date();
+  log.info('widget.availability.start', { checkoutId: args.checkoutId, method: args.method ?? null });
   const checkoutCtx = await resolveCheckout(args.checkoutId);
   const ctx = await loadSchedulingContext(checkoutCtx.items);
   const { settings, plan, rules } = ctx;
@@ -70,7 +72,7 @@ export async function widgetPayload(args: {
     availability = computeAvailability({ settings, method, productRules: rules, from, to, now, usage, plan });
   }
 
-  return {
+  const payload = {
     enabled,
     required: isSchedulingRequired(ctx, checkoutCtx.items),
     settingsRevision: settings.settingsRevision,
@@ -95,4 +97,13 @@ export async function widgetPayload(args: {
     deliveryNote: settings.delivery.note,
     currentHold: hold,
   };
+  log.info('widget.availability.complete', {
+    checkoutId: args.checkoutId,
+    itemCount: checkoutCtx.items.length,
+    enabled: payload.enabled,
+    required: payload.required,
+    method: payload.availability?.method ?? null,
+    dayCount: payload.availability?.days.length ?? 0,
+  });
+  return payload;
 }

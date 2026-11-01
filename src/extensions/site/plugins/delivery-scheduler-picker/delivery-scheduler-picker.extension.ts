@@ -9,11 +9,12 @@ export default extensions.sitePlugin({
     logoUrl: '{{BASE_URL}}/delivery-scheduler-picker-logo.svg',
   },
   // Legacy `placements` format: this builder version has no `placementsSlotIds`.
-  // The delivery-step slot is the one whose API exposes disableContinueButton.
+  // This delivery-step options slot exposes deliveryStepState and
+  // disableContinueButton to the plugin.
   placements: [{
     appDefinitionId: '1380b703-ce81-ff05-f115-39571d94dfcd',
     widgetId: '14fd5970-8072-c276-1246-058b79e70c1a',
-    slotId: '14fd5970-8072-c276-1246-058b79e70c1a:checkout:steps:deliveryMethod',
+    slotId: 'checkout:delivery-step:options:after',
   }],
   installation: { autoAdd: true },
   tagName: 'delivery-scheduler-picker',

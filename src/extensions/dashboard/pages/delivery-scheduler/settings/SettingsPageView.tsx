@@ -38,6 +38,10 @@ export const SettingsPageView = () => {
     fetch: async () => {
       const result = await api.getSettings();
       loaded.current = result;
+      // SettingsPageState stores the fetched entity separately from the form.
+      // Explicitly hydrate the form so existing settings are not replaced by
+      // the controller's initial defaults on the first save.
+      form.reset({ settings: toInput(result.settings) });
       return { settings: result };
     },
     onSave: async () => {
