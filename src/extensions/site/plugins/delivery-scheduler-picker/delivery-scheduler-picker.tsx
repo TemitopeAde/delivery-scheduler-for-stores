@@ -347,7 +347,13 @@ const DeliverySchedulerPicker = ({
   );
 
   useEffect(() => {
-    if (checkoutId) void load(vmRef.current?.method ?? null);
+    // Wix can reuse the same plugin element for a different checkout. Clear
+    // the previous checkout's hold and calendar before starting the new load.
+    loadSeqRef.current += 1;
+    lastUpdatedDateRef.current = '';
+    setLoadError(false);
+    setVm(null);
+    if (checkoutId) void load(null);
   }, [checkoutId, load]);
 
   useEffect(() => {
