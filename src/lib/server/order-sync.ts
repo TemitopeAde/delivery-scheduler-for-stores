@@ -10,7 +10,7 @@ import { getScheduledOrder, saveScheduledOrder, type ScheduledOrder } from './sc
 import { isSchedulingRequired, loadSchedulingContext } from './scheduling-context';
 import { loadSettings } from './settings-repo';
 
-export type OrderEventType = 'order.created' | 'order.approved' | 'order.canceled' | 'manual.retry';
+export type OrderEventType = 'order.created' | 'order.approved' | 'order.paid' | 'order.canceled' | 'manual.retry';
 
 interface SyncOutcome {
   status: Extract<ProcessingStatus, 'processed' | 'skipped'>;
@@ -189,7 +189,7 @@ export async function retryEvent(entry: EventLogEntry): Promise<ProcessingStatus
   const order = await fetchOrder(entry.orderId);
   if (!order) return entry.processingStatus;
   const eventType = (
-    ['order.created', 'order.approved', 'order.canceled'].includes(entry.eventType)
+    ['order.created', 'order.approved', 'order.paid', 'order.canceled'].includes(entry.eventType)
       ? entry.eventType
       : 'manual.retry'
   ) as OrderEventType;

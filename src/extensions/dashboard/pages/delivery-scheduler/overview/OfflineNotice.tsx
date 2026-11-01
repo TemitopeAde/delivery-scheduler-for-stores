@@ -1,8 +1,10 @@
 import React from 'react';
 import { SectionHelper } from '@wix/design-system';
+import { useDashboardI18n } from '../LanguageContext';
 
 /** Shown at the bottom of the page while the browser reports no connectivity. */
 export const OfflineNotice = () => {
+  const { t } = useDashboardI18n();
   const [online, setOnline] = React.useState(() => navigator.onLine !== false);
   React.useEffect(() => {
     const up = () => setOnline(true);
@@ -16,8 +18,8 @@ export const OfflineNotice = () => {
   }, []);
   if (online) return null;
   return (
-    <SectionHelper skin="warning" title="You're offline">
-      Data on this page may be out of date. It refreshes when your connection returns.
+    <SectionHelper skin="warning" title={t('overview.offlineTitle')}>
+      {t('overview.offlineDesc')}
     </SectionHelper>
   );
 };

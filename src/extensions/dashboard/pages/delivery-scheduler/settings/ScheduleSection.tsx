@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from '../../../../../lib/defaults';
 import { WEEKDAYS } from '../../../../../lib/schemas';
 import { minutesToHHmm } from '../../../../../lib/time/zoned';
 import { NumberField, SelectField, ToggleField, proLabel, type SectionProps } from './fields';
+import { useDashboardI18n } from '../LanguageContext';
 
 /** Distinct slot IDs the current weekly hours produce, for labelling. */
 function slotIds(value: SectionProps['value']) {
@@ -22,13 +23,15 @@ function slotIds(value: SectionProps['value']) {
 }
 
 export const ScheduleSection = ({ value, update, plan }: SectionProps) => {
+  const { t } = useDashboardI18n();
   const slots = value.slots;
   const setSlots = (patch: Partial<typeof slots>) => update({ slots: { ...slots, ...patch } });
   const isPro = plan === 'pro';
+
   return (
     <Box direction="vertical" gap="SP4">
       <NumberField
-        label="Minimum notice (hours)"
+        label={t('settings.minNotice')}
         value={value.minNoticeMinutes / 60}
         min={0}
         max={1440}
@@ -36,44 +39,44 @@ export const ScheduleSection = ({ value, update, plan }: SectionProps) => {
         onChange={(h) => update({ minNoticeMinutes: Math.round(h * 60) })}
       />
       <NumberField
-        label={proLabel('Book up to (days ahead)', plan, value.maxDaysAhead > BASIC_MAX_DAYS_AHEAD)}
+        label={proLabel(t('settings.maxDaysAhead'), plan, value.maxDaysAhead > BASIC_MAX_DAYS_AHEAD)}
         value={value.maxDaysAhead}
         min={0}
         max={isPro ? 365 : BASIC_MAX_DAYS_AHEAD}
         onChange={(maxDaysAhead) => update({ maxDaysAhead })}
       />
-      <ToggleField label="Allow same-day orders" checked={value.sameDayEnabled} onChange={(sameDayEnabled) => update({ sameDayEnabled })} />
+      <ToggleField label={t('settings.sameDay')} checked={value.sameDayEnabled} onChange={(sameDayEnabled) => update({ sameDayEnabled })} />
       <ToggleField
-        label="Daily cut-off time"
+        label={t('settings.cutoff')}
         checked={value.cutoff.enabled}
         onChange={(enabled) => update({ cutoff: { ...value.cutoff, enabled } })}
-        info="Orders placed after this time are treated as if placed the next day."
+        info={t('settings.cutoffInfo')}
       />
       {value.cutoff.enabled && (
-        <FormField label="Cut-off (HH:mm, store time)">
+        <FormField label={t('settings.cutoffTime')}>
           <Box width="120px">
             <Input value={value.cutoff.time} onChange={(e) => update({ cutoff: { ...value.cutoff, time: e.target.value } })} />
           </Box>
         </FormField>
       )}
       <SelectField
-        label="Customer chooses"
+        label={t('settings.customerChooses')}
         value={slots.mode}
         options={[
-          { id: 'timeslots', label: 'A date and a time slot' },
-          { id: 'dateOnly', label: 'A date only' },
+          { id: 'timeslots', label: t('settings.modeSlots') },
+          { id: 'dateOnly', label: t('settings.modeDateOnly') },
         ]}
         onChange={(mode) => setSlots({ mode })}
       />
       {slots.mode === 'timeslots' && (
         <>
-          <NumberField label="Slot length (minutes)" value={slots.durationMinutes} min={15} max={720} step={15} onChange={(durationMinutes) => setSlots({ durationMinutes, intervalMinutes: Math.max(slots.intervalMinutes, durationMinutes) })} />
-          <NumberField label="New slot every (minutes)" value={slots.intervalMinutes} min={slots.durationMinutes} max={720} step={15} onChange={(intervalMinutes) => setSlots({ intervalMinutes })} />
-          <NumberField label="Buffer between slots (minutes)" value={slots.bufferMinutes} min={0} max={240} step={5} onChange={(bufferMinutes) => setSlots({ bufferMinutes })} />
+          <NumberField label={t('settings.slotInterval')} value={slots.durationMinutes} min={15} max={720} step={15} onChange={(durationMinutes) => setSlots({ durationMinutes, intervalMinutes: Math.max(slots.intervalMinutes, durationMinutes) })} />
+          <NumberField label={t('settings.slotInterval')} value={slots.intervalMinutes} min={slots.durationMinutes} max={720} step={15} onChange={(intervalMinutes) => setSlots({ intervalMinutes })} />
+          <NumberField label={t('settings.slotBuffer')} value={slots.bufferMinutes} min={0} max={240} step={5} onChange={(bufferMinutes) => setSlots({ bufferMinutes })} />
         </>
       )}
       <NumberField
-        label={proLabel('Orders per slot (0 = unlimited)', plan, true)}
+        label={proLabel(t('settings.slotCapacity'), plan, true)}
         value={slots.defaultCapacity}
         min={0}
         max={100000}
@@ -81,7 +84,7 @@ export const ScheduleSection = ({ value, update, plan }: SectionProps) => {
         onChange={(defaultCapacity) => setSlots({ defaultCapacity })}
       />
       {slots.mode === 'timeslots' && (
-        <FormField label={proLabel('Slot labels', plan, true)} infoContent="Optional customer-facing names, e.g. “Morning”. Leave blank to show the time.">
+        <FormField label={proLabel(t('settings.customSlotLabels'), plan, true)} infoContent={t('settings.customSlotLabelsInfo')}>
           <Box direction="vertical" gap="SP2">
             {slotIds(value).map(([id, time]) => (
               <Box key={id} gap="SP2" verticalAlign="middle">

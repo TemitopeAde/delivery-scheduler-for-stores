@@ -1,4 +1,5 @@
 import type { ScheduleStatus } from '../../../../lib/schemas';
+import type { DashboardMessageKey } from '../../../../lib/i18n/dashboard-messages';
 
 export const METHOD_LABELS: Record<'delivery' | 'pickup', string> = {
   delivery: 'Delivery',
@@ -52,15 +53,88 @@ export const FULFILLMENT_STATUS_LABELS: Record<string, string> = {
   FULFILLED: 'Fulfilled',
 };
 
+export function getMethodLabel(method: string, t?: (k: DashboardMessageKey) => string): string {
+  if (t) {
+    if (method === 'delivery') return t('common.delivery');
+    if (method === 'pickup') return t('common.pickup');
+  }
+  return METHOD_LABELS[method as 'delivery' | 'pickup'] ?? method;
+}
+
+export function getScheduleStatusLabel(status: string, t?: (k: DashboardMessageKey) => string): string {
+  if (t) {
+    const map: Record<string, DashboardMessageKey> = {
+      scheduled: 'common.scheduled',
+      preparing: 'common.preparing',
+      ready: 'common.ready',
+      out_for_delivery: 'common.outForDelivery',
+      completed: 'common.completed',
+      needs_review: 'common.needsReview',
+      missing: 'common.missingSchedule',
+      cancelled: 'common.cancelled',
+    };
+    if (map[status]) return t(map[status]);
+  }
+  return SCHEDULE_STATUS_LABELS[status as ScheduleStatus] ?? status;
+}
+
+export function getOrderStatusLabel(status: string, t?: (k: DashboardMessageKey) => string): string {
+  if (t) {
+    const map: Record<string, DashboardMessageKey> = {
+      INITIALIZED: 'common.initialized',
+      APPROVED: 'common.approved',
+      PENDING: 'common.pending',
+      CANCELED: 'common.canceled',
+      REJECTED: 'common.rejected',
+    };
+    if (map[status]) return t(map[status]);
+  }
+  return ORDER_STATUS_LABELS[status] ?? status;
+}
+
+export function getPaymentStatusLabel(status: string, t?: (k: DashboardMessageKey) => string): string {
+  if (t) {
+    const map: Record<string, DashboardMessageKey> = {
+      NOT_PAID: 'common.notPaid',
+      PAID: 'common.paid',
+      PARTIALLY_PAID: 'common.partiallyPaid',
+      PARTIALLY_REFUNDED: 'common.partiallyRefunded',
+      FULLY_REFUNDED: 'common.refunded',
+      PENDING: 'common.pending',
+      PENDING_MERCHANT: 'common.pendingMerchant',
+    };
+    if (map[status]) return t(map[status]);
+  }
+  return PAYMENT_STATUS_LABELS[status] ?? status;
+}
+
+export function getFulfillmentStatusLabel(status: string, t?: (k: DashboardMessageKey) => string): string {
+  if (t) {
+    const map: Record<string, DashboardMessageKey> = {
+      NOT_FULFILLED: 'common.notFulfilled',
+      PARTIALLY_FULFILLED: 'common.partiallyFulfilled',
+      FULFILLED: 'common.fulfilled',
+    };
+    if (map[status]) return t(map[status]);
+  }
+  return FULFILLMENT_STATUS_LABELS[status] ?? status;
+}
+
 export const label = (map: Record<string, string>, value: string) => map[value] ?? (value || '—');
 
-/** Merchant-local calendar date for display; never shifted through the browser zone. */
-export function displayDate(localDate: string | null): string {
+/** Merchant-local calendar date for display; formatted according to the locale. */
+export function displayDate(localDate: string | null, locale?: string): string {
   if (!localDate) return '—';
   const [y = 1970, m = 1, d = 1] = localDate.split('-').map(Number);
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(y, m - 1, d, 12)),
-  );
+  try {
+    return new Intl.DateTimeFormat(locale || undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+      new Date(Date.UTC(y, m - 1, d, 12)),
+    );
+  } catch {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: 'UTC' }).format(
+      new Date(Date.UTC(y, m - 1, d, 12)),
+    );
+  }
 }
 
 /** A calendar Date picked in the browser, as the YYYY-MM-DD it shows. */

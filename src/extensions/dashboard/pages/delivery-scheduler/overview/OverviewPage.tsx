@@ -5,12 +5,14 @@ import { Box, Button, Card, Loader, Page, SectionHelper, StatisticsWidget, Table
 import { PageWrapper } from '@wix/patterns';
 import { CHECKOUT_PLUGIN_PLACEMENT, SITE_PLUGIN_ID } from '../../../../../lib/constants';
 import { api, type Overview } from '../dashboard-api';
-import { METHOD_LABELS, displayDate } from '../labels';
+import { getMethodLabel, displayDate } from '../labels';
 import { SectionTabs } from '../SectionTabs';
 import { OfflineNotice } from './OfflineNotice';
+import { useDashboardI18n } from '../LanguageContext';
 
 export const OverviewPage = () => {
   const navigate = useNavigate();
+  const { t, locale } = useDashboardI18n();
   const [data, setData] = React.useState<Overview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [adding, setAdding] = React.useState(false);
@@ -21,9 +23,9 @@ export const OverviewPage = () => {
       setData(await api.overview());
     } catch (err) {
       console.error('Overview failed', err);
-      setError(err instanceof Error ? err.message : 'Failed to load the overview');
+      setError(err instanceof Error ? err.message : t('overview.loadError'));
     }
-  }, []);
+  }, [t]);
 
   React.useEffect(() => {
     void load();
@@ -33,11 +35,11 @@ export const OverviewPage = () => {
     setAdding(true);
     try {
       await dashboard.addSitePlugin(SITE_PLUGIN_ID, { placement: CHECKOUT_PLUGIN_PLACEMENT });
-      dashboard.showToast({ message: 'Added to your checkout page.', type: 'success' });
+      dashboard.showToast({ message: t('overview.addedToCheckout'), type: 'success' });
       await load();
     } catch (err) {
       console.error('addSitePlugin failed', err);
-      dashboard.showToast({ message: 'Could not add the widget. It may already be on your checkout page.', type: 'warning' });
+      dashboard.showToast({ message: t('overview.addFailed'), type: 'warning' });
     } finally {
       setAdding(false);
     }
@@ -47,12 +49,12 @@ export const OverviewPage = () => {
     <PageWrapper>
       <Page>
         <Page.Header
-          title="Delivery Scheduler"
-          subtitle="Today's fulfilment at a glance."
+          title={t('overview.title')}
+          subtitle={t('overview.subtitle')}
           actionsBar={
             data?.widgetPlacement !== 'placed' ? (
               <Button onClick={() => void addToCheckout()} disabled={adding} prefixIcon={adding ? <Loader size="tiny" /> : undefined}>
-                {adding ? 'Adding to checkout…' : 'Add to checkout'}
+                {adding ? t('overview.addingToCheckout') : t('overview.addToCheckout')}
               </Button>
             ) : undefined
           }
@@ -61,7 +63,7 @@ export const OverviewPage = () => {
           <Box direction="vertical" gap="SP4">
             <SectionTabs />
             {error && (
-              <SectionHelper skin="danger" title="Couldn't load the overview" actionText="Retry" onAction={() => void load()}>
+              <SectionHelper skin="danger" title={t('overview.loadError')} actionText={t('common.retry')} onAction={() => void load()}>
                 {error}
               </SectionHelper>
             )}
@@ -73,54 +75,54 @@ export const OverviewPage = () => {
             {data && (
               <>
                 {!data.configured && (
-                  <SectionHelper skin="standard" title="Finish setup" actionText="Open settings" onAction={() => navigate('/settings')}>
-                    Set your time zone, hours and methods, then turn scheduling on. Checkout is never blocked until you do.
+                  <SectionHelper skin="standard" title={t('overview.finishSetup')} actionText={t('overview.openSettings')} onAction={() => navigate('/settings')}>
+                    {t('overview.finishSetupDesc')}
                   </SectionHelper>
                 )}
                 {data.configured && !data.enabled && (
-                  <SectionHelper skin="warning" title="Scheduling is off" actionText="Open settings" onAction={() => navigate('/settings')}>
-                    Customers can't choose a time and checkout isn't validated.
+                  <SectionHelper skin="warning" title={t('overview.schedulingOff')} actionText={t('overview.openSettings')} onAction={() => navigate('/settings')}>
+                    {t('overview.schedulingOffDesc')}
                   </SectionHelper>
                 )}
                 {data.widgetPlacement !== 'placed' && (
                   <SectionHelper
                     skin={data.widgetPlacement === 'unknown' ? 'standard' : 'warning'}
-                    title={data.widgetPlacement === 'unknown' ? 'Check the checkout widget' : 'The checkout widget isn’t on your site'}
+                    title={t('overview.widgetNotPlaced')}
                   >
-                    Customers choose their time in the delivery step of checkout. Add the widget there to start collecting schedules.
+                    {t('overview.widgetNotPlacedDesc')}
                   </SectionHelper>
                 )}
                 {(data.counts.needsReview > 0 || data.counts.missingSchedule > 0) && (
-                  <SectionHelper skin="danger" title="Orders need attention" actionText="Review orders" onAction={() => navigate('/orders')}>
-                    {data.counts.needsReview} order(s) need review and {data.counts.missingSchedule} required order(s) arrived without a schedule.
+                  <SectionHelper skin="danger" title={t('overview.attentionNeeded')} actionText={t('overview.reviewOrders')} onAction={() => navigate('/orders')}>
+                    {t('overview.attentionDesc', { needs: data.counts.needsReview, missing: data.counts.missingSchedule })}
                   </SectionHelper>
                 )}
                 <Card>
                   <StatisticsWidget
                     items={[
-                      { value: String(data.counts.today), description: `Today (${displayDate(data.today)})` },
-                      { value: String(data.counts.upcoming), description: 'Next 7 days' },
-                      { value: String(data.counts.delivery), description: 'Deliveries (7 days)' },
-                      { value: String(data.counts.pickup), description: 'Pickups (7 days)' },
-                      { value: String(data.counts.missingSchedule), description: 'Missing a schedule' },
+                      { value: String(data.counts.today), description: t('overview.todayWithDate', { date: displayDate(data.today, locale) }) },
+                      { value: String(data.counts.upcoming), description: t('overview.next7Days') },
+                      { value: String(data.counts.delivery), description: t('overview.deliveries7Days') },
+                      { value: String(data.counts.pickup), description: t('overview.pickups7Days') },
+                      { value: String(data.counts.missingSchedule), description: t('overview.missingScheduleCount') },
                     ]}
                   />
                 </Card>
                 <Card>
-                  <Card.Header title="Slots near capacity" subtitle={`Next 7 days · ${data.timezone}`} />
+                  <Card.Header title={t('overview.slotsNearCapacity')} subtitle={t('overview.slotsNearCapacitySub', { timezone: data.timezone })} />
                   <Card.Divider />
                   {data.nearCapacity.length === 0 ? (
                     <Card.Content>
-                      <Text size="small" secondary>No slots are at or near capacity.</Text>
+                      <Text size="small" secondary>{t('overview.noSlotsNearCapacity')}</Text>
                     </Card.Content>
                   ) : (
                     <Table
                       data={data.nearCapacity}
                       columns={[
-                        { title: 'Date', render: (r) => displayDate(r.date) },
-                        { title: 'Slot', render: (r) => r.slotId },
-                        { title: 'Method', render: (r) => (r.method === 'pickup' ? METHOD_LABELS.pickup : METHOD_LABELS.delivery) },
-                        { title: 'Remaining', render: (r) => (r.remaining === 0 ? 'Full' : String(r.remaining)) },
+                        { title: t('overview.colDate'), render: (r) => displayDate(r.date, locale) },
+                        { title: t('overview.colSlot'), render: (r) => r.slotId },
+                        { title: t('overview.colMethod'), render: (r) => getMethodLabel(r.method, t) },
+                        { title: t('overview.colRemaining'), render: (r) => (r.remaining === 0 ? t('overview.full') : String(r.remaining)) },
                       ]}
                     >
                       <Table.Content />
@@ -128,8 +130,8 @@ export const OverviewPage = () => {
                   )}
                 </Card>
                 <Box gap="SP2">
-                  <Button onClick={() => navigate('/orders')}>View orders</Button>
-                  <Button priority="secondary" onClick={() => void load()}>Refresh</Button>
+                  <Button onClick={() => navigate('/orders')}>{t('overview.viewAllOrders')}</Button>
+                  <Button priority="secondary" onClick={() => void load()}>{t('overview.refresh')}</Button>
                 </Box>
               </>
             )}

@@ -3,6 +3,7 @@ import { Box, Text } from '@wix/design-system';
 import { DEFAULT_SETTINGS } from '../../../../../lib/defaults';
 import type { SettingsInput } from '../../../../../lib/schemas';
 import { renderPreviewHtml } from '../../../../../widget/preview';
+import { useDashboardI18n } from '../LanguageContext';
 
 /**
  * Renders the real customer widget markup with the unsaved settings. The
@@ -10,6 +11,7 @@ import { renderPreviewHtml } from '../../../../../widget/preview';
  * so injecting it is safe. Invalid in-progress values fall back to the last render.
  */
 export const WidgetPreview = ({ value }: { value: SettingsInput }) => {
+  const { t } = useDashboardI18n();
   const lastGood = React.useRef('');
   let html = lastGood.current;
   try {
@@ -20,7 +22,7 @@ export const WidgetPreview = ({ value }: { value: SettingsInput }) => {
   }
   return (
     <Box direction="vertical" gap="SP2">
-      <Text size="tiny" secondary>Sample dates from your current settings. Checkout colors apply when custom colors are off.</Text>
+      <Text size="tiny" secondary>{t('settings.previewNote')}</Text>
       <div dangerouslySetInnerHTML={{ __html: html }} />
     </Box>
   );

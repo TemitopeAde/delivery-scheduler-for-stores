@@ -11,9 +11,10 @@ import {
   type WeekHours,
 } from '../../../../../lib/schemas';
 import { api } from '../dashboard-api';
-import { METHOD_LABELS } from '../labels';
+import { getMethodLabel } from '../labels';
 import { WeekHoursEditor } from '../settings/WeekHoursEditor';
 import { ProductPicker } from './ProductPicker';
+import { useDashboardI18n } from '../LanguageContext';
 
 type RuleFormFields = {
   product: { id: string; name: string } | null;
@@ -28,6 +29,7 @@ type RuleFormFields = {
 export const ProductRuleEntityPage = () => {
   const { id } = useParams<{ id?: string }>();
   const form = useForm<RuleFormFields>();
+  const { t } = useDashboardI18n();
 
   const state = useEntityPage<ProductRule, RuleFormFields>({
     parentPath: '/product-rules',
@@ -37,8 +39,7 @@ export const ProductRuleEntityPage = () => {
     onSave: async () => {
       const v = form.getValues();
       const product = v.product;
-      if (!product) throw new Error('Choose a product');
-      // Same schema as the server, so the merchant sees validation before the round trip.
+      if (!product) throw new Error(t('productRules.chooseProduct'));
       const input = productRuleInputSchema.parse({
         productId: product.id,
         productName: product.name,
@@ -50,17 +51,17 @@ export const ProductRuleEntityPage = () => {
       });
       return { updatedEntity: (await api.saveRule(input)).rule };
     },
-    saveSuccessToast: 'Product rule saved',
-    saveErrorToast: (err) => (err instanceof Error ? err.message : 'Failed to save the product rule'),
+    saveSuccessToast: t('productRules.saveSuccess'),
+    saveErrorToast: (err) => (err instanceof Error ? err.message : t('productRules.saveError')),
   });
 
   return (
     <EntityPage state={state}>
-      <EntityPage.Header title={{ text: id ? 'Edit product rule' : 'New product rule' }} />
+      <EntityPage.Header title={{ text: id ? t('productRules.editRuleTitle') : t('productRules.newRuleTitle') }} />
       <EntityPage.Content>
         <EntityPage.MainContent>
           <Card>
-            <Card.Header title="Product" />
+            <Card.Header title={t('productRules.productSection')} />
             <Card.Divider />
             <Card.Content>
               <ProductFields isNew={!id} />
@@ -68,8 +69,8 @@ export const ProductRuleEntityPage = () => {
           </Card>
           <Card>
             <Card.Header
-              title="Custom hours"
-              subtitle="Optionally limit this product to narrower hours. It can never widen your store hours or override closures."
+              title={t('productRules.customHours')}
+              subtitle={t('productRules.ruleActiveInfo')}
             />
             <Card.Divider />
             <Card.Content>
@@ -84,26 +85,27 @@ export const ProductRuleEntityPage = () => {
 
 const ProductFields = ({ isNew }: { isNew: boolean }) => {
   const page = useEntityPageContext<ProductRule, RuleFormFields>();
+  const { t } = useDashboardI18n();
   const rule = page.entity;
   const control = page.form.control;
   const product = useController({
     name: 'product',
     control,
     defaultValue: rule ? { id: rule.productId, name: rule.productName } : null,
-    rules: { validate: (v) => (v ? true : 'Choose a product') },
+    rules: { validate: (v) => (v ? true : t('productRules.chooseProduct')) },
   });
   const enabled = useController({ name: 'enabled', control, defaultValue: rule?.enabled ?? true });
   const prep = useController({
     name: 'preparationHours',
     control,
     defaultValue: rule ? rule.preparationMinutes / 60 : 0,
-    rules: { min: { value: 0, message: 'Cannot be negative' } },
+    rules: { min: { value: 0, message: '0' } },
   });
   const methods = useController({
     name: 'methods',
     control,
     defaultValue: rule?.allowedFulfilmentMethods ?? ['delivery', 'pickup'],
-    rules: { validate: (v) => (v.length > 0 ? true : 'Allow at least one method') },
+    rules: { validate: (v) => (v.length > 0 ? true : t('productRules.allowedMethods')) },
   });
   const required = useController({ name: 'requiredScheduling', control, defaultValue: rule?.requiredScheduling ?? true });
 
@@ -113,28 +115,28 @@ const ProductFields = ({ isNew }: { isNew: boolean }) => {
   return (
     <Box direction="vertical" gap="SP4">
       {isNew ? (
-        <FormField label="Product" required status={product.fieldState.error ? 'error' : undefined} statusMessage={product.fieldState.error?.message}>
+        <FormField label={t('productRules.productSection')} required status={product.fieldState.error ? 'error' : undefined} statusMessage={product.fieldState.error?.message}>
           <ProductPicker value={product.field.value} onChange={product.field.onChange} />
         </FormField>
       ) : (
         <Text weight="bold">{rule?.productName || rule?.productId}</Text>
       )}
-      <FormField label="Rule active" labelPlacement="right">
+      <FormField label={t('productRules.ruleActive')} labelPlacement="right">
         <ToggleSwitch checked={enabled.field.value} onChange={(e) => enabled.field.onChange(e.target.checked)} />
       </FormField>
-      <FormField label="Preparation time (hours)" infoContent="Added on top of your minimum notice; the larger of the two applies." status={prep.fieldState.error ? 'error' : undefined} statusMessage={prep.fieldState.error?.message}>
+      <FormField label={t('productRules.extraPrep')} status={prep.fieldState.error ? 'error' : undefined} statusMessage={prep.fieldState.error?.message}>
         <NumberInput min={0} max={1440} step={0.5} value={prep.field.value} onChange={(v) => prep.field.onChange(v ?? 0)} />
       </FormField>
-      <FormField label="Allowed methods" status={methods.fieldState.error ? 'error' : undefined} statusMessage={methods.fieldState.error?.message}>
+      <FormField label={t('productRules.allowedMethods')} status={methods.fieldState.error ? 'error' : undefined} statusMessage={methods.fieldState.error?.message}>
         <Box gap="SP4">
           {(['delivery', 'pickup'] as const).map((m) => (
             <Checkbox key={m} checked={methods.field.value.includes(m)} onChange={(e) => toggleMethod(m, e.target.checked)}>
-              {METHOD_LABELS[m]}
+              {getMethodLabel(m, t)}
             </Checkbox>
           ))}
         </Box>
       </FormField>
-      <FormField label="Require a schedule for this product" labelPlacement="right" infoContent="Used when scheduling is required for selected products only.">
+      <FormField label={t('productRules.requireScheduling')} labelPlacement="right">
         <ToggleSwitch checked={required.field.value} onChange={(e) => required.field.onChange(e.target.checked)} />
       </FormField>
     </Box>
@@ -143,6 +145,7 @@ const ProductFields = ({ isNew }: { isNew: boolean }) => {
 
 const HoursFields = () => {
   const page = useEntityPageContext<ProductRule, RuleFormFields>();
+  const { t } = useDashboardI18n();
   const rule = page.entity;
   const restrict = useController({
     name: 'restrictHours',
@@ -156,7 +159,7 @@ const HoursFields = () => {
   });
   return (
     <Box direction="vertical" gap="SP4">
-      <FormField label="Restrict this product to custom hours" labelPlacement="right">
+      <FormField label={t('productRules.customHours')} labelPlacement="right">
         <ToggleSwitch checked={restrict.field.value} onChange={(e) => restrict.field.onChange(e.target.checked)} />
       </FormField>
       {restrict.field.value && <WeekHoursEditor value={hours.field.value} onChange={hours.field.onChange} />}

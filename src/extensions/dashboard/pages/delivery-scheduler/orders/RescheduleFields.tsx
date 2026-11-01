@@ -5,7 +5,8 @@ import { buildSlotWindows, openingIntervals } from '../../../../../lib/engine/sl
 import type { FulfilmentMethod, Settings } from '../../../../../lib/schemas';
 import { minutesToHHmm } from '../../../../../lib/time/zoned';
 import type { ScheduledOrder } from '../dashboard-api';
-import { METHOD_LABELS, pickedDateToLocal } from '../labels';
+import { getMethodLabel, pickedDateToLocal } from '../labels';
+import { useDashboardI18n } from '../LanguageContext';
 import type { OrderFormFields } from './OrderEntityPage';
 
 export interface RescheduleValue {
@@ -20,10 +21,6 @@ function toPickerDate(localDate: string | null): Date | undefined {
   return new Date(y, m - 1, d);
 }
 
-/**
- * Slot options come from the same pure rules the backend uses, so the merchant
- * only sees times that exist; the server still re-validates and enforces capacity.
- */
 export const RescheduleFields = ({
   control,
   order,
@@ -33,6 +30,7 @@ export const RescheduleFields = ({
   order: ScheduledOrder;
   settings: Settings;
 }) => {
+  const { t } = useDashboardI18n();
   const { field } = useController({
     name: 'reschedule',
     control,
@@ -49,35 +47,35 @@ export const RescheduleFields = ({
 
   return (
     <Box direction="vertical" gap="SP4">
-      <FormField label="Method">
+      <FormField label={t('orderDetail.method')}>
         <Dropdown
           selectedId={value.method ?? undefined}
-          placeholder="Choose a method"
-          options={methods.map((m) => ({ id: m, value: METHOD_LABELS[m] }))}
+          placeholder={t('orderDetail.chooseMethod')}
+          options={methods.map((m) => ({ id: m, value: getMethodLabel(m, t) }))}
           onSelect={(o) => field.onChange({ ...value, method: o.id === 'pickup' ? 'pickup' : 'delivery', slotId: null })}
         />
       </FormField>
-      <FormField label="Date">
+      <FormField label={t('orders.colScheduled')}>
         <DatePicker
           width="100%"
           value={toPickerDate(value.localDate)}
           onChange={(date) => field.onChange({ ...value, localDate: pickedDateToLocal(date) ?? null, slotId: null })}
         />
       </FormField>
-      <FormField label="Time">
+      <FormField label={t('orderDetail.chooseSlot')}>
         {slots.length === 0 ? (
           <Text size="small" secondary>
-            {value.localDate ? 'Closed on this date for the selected method.' : 'Choose a date first.'}
+            {value.localDate ? t('settings.closed') : t('orderDetail.chooseDate')}
           </Text>
         ) : (
           <Dropdown
             selectedId={value.slotId ?? undefined}
-            placeholder="Choose a time"
+            placeholder={t('orderDetail.chooseSlot')}
             options={slots.map((s) => ({
               id: s.slotId,
               value:
                 settings.slots.labels[s.slotId] ??
-                (s.slotId === 'day' ? 'Any time' : `${minutesToHHmm(s.startMinutes)}–${minutesToHHmm(s.endMinutes)}`),
+                (s.slotId === 'day' ? t('orderDetail.anyTime') : `${minutesToHHmm(s.startMinutes)}–${minutesToHHmm(s.endMinutes)}`),
             }))}
             onSelect={(o) => field.onChange({ ...value, slotId: String(o.id) })}
           />

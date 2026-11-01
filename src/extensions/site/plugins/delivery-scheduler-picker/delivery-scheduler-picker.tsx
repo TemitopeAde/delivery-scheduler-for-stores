@@ -108,7 +108,15 @@ const DeliverySchedulerPicker = ({
     [setVm],
   );
 
-  const locale = useCallback(() => document.documentElement.lang || navigator.language || 'en', []);
+  const siteLocale = useCallback(() => {
+    try {
+      const htmlLang = typeof document !== 'undefined' ? document.documentElement.lang?.trim() : '';
+      if (htmlLang && htmlLang.length >= 2) return htmlLang;
+    } catch {
+      // ignore
+    }
+    return '';
+  }, []);
 
   const announce = useCallback((text: string) => {
     if (!liveRef.current) return;
@@ -137,7 +145,8 @@ const DeliverySchedulerPicker = ({
         url.searchParams.set('checkoutId', checkoutIdValue);
         if (method) url.searchParams.set('method', method);
         if (from) url.searchParams.set('from', from);
-        url.searchParams.set('locale', locale());
+        const loc = siteLocale();
+        if (loc) url.searchParams.set('locale', loc);
         const controller = new AbortController();
         const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
         let payload: WidgetPayload;
@@ -219,7 +228,7 @@ const DeliverySchedulerPicker = ({
         else setLoadError(true);
       }
     },
-    [locale, setVm, update],
+    [siteLocale, setVm, update],
   );
 
   const hold = useCallback(
@@ -528,14 +537,15 @@ const DeliverySchedulerPicker = ({
     focusAfterRenderRef.current = null;
   }, [vm, loadError, deliveryStepState]);
 
-  const messages = resolveMessages(locale(), {});
+  const activeLocale = vm?.payload.locale ?? siteLocale() ?? DEFAULT_SETTINGS.translations.defaultLocale;
+  const messages = vm?.payload.messages ?? resolveMessages(activeLocale, {});
   // Keep the picker visible until the customer has selected a hold. Once a
   // hold exists, Wix may render the delivery step in summary mode and the
   // compact confirmation is appropriate.
   const compact = !!vm && deliveryStepState === 'summary' && !!vm.hold;
   let html: string;
   if (!checkoutId) {
-    html = renderPreviewHtml(DEFAULT_SETTINGS, locale());
+    html = renderPreviewHtml(DEFAULT_SETTINGS, activeLocale);
   } else if (!vm) {
     html = loadError
       ? `<div class="ds"><div class="ds-alert" data-tone="error" role="alert">${messages['state.error']} <button type="button" class="ds-link" data-action="retry">${messages['state.retry']}</button></div></div>`

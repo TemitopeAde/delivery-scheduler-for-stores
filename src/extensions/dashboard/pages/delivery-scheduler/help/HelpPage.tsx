@@ -5,8 +5,10 @@ import { PageWrapper } from '@wix/patterns';
 import { api, type Diagnostics } from '../dashboard-api';
 import { OfflineNotice } from '../overview/OfflineNotice';
 import { SectionTabs } from '../SectionTabs';
+import { useDashboardI18n } from '../LanguageContext';
 
 export const HelpPage = () => {
+  const { t, locale } = useDashboardI18n();
   const [data, setData] = React.useState<Diagnostics | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [working, setWorking] = React.useState(false);
@@ -17,9 +19,9 @@ export const HelpPage = () => {
       setData(await api.diagnostics());
     } catch (err) {
       console.error('Diagnostics failed', err);
-      setError(err instanceof Error ? err.message : 'Failed to load diagnostics');
+      setError(err instanceof Error ? err.message : t('help.loadErrorTitle'));
     }
-  }, []);
+  }, [t]);
 
   React.useEffect(() => {
     void load();
@@ -31,13 +33,17 @@ export const HelpPage = () => {
       const result = await api.reconcile();
       const recovered = result.retried.filter((r) => r.status === 'processed' || r.status === 'skipped').length;
       dashboard.showToast({
-        message: `Released ${result.expiredHolds} expired hold(s); recovered ${recovered} of ${result.retried.length} failed event(s).`,
+        message: t('help.reconcileSuccess', {
+          holds: result.expiredHolds,
+          recovered,
+          total: result.retried.length,
+        }),
         type: 'success',
       });
       await load();
     } catch (err) {
       console.error('Reconcile failed', err);
-      dashboard.showToast({ message: 'Reconciliation failed. Please try again.', type: 'error' });
+      dashboard.showToast({ message: t('help.reconcileFailed'), type: 'error' });
     } finally {
       setWorking(false);
     }
@@ -47,11 +53,11 @@ export const HelpPage = () => {
     <PageWrapper>
       <Page>
         <Page.Header
-          title="Help & diagnostics"
-          subtitle="Integration health, failed order events and recovery."
+          title={t('help.title')}
+          subtitle={t('help.subtitle')}
           actionsBar={
             <Button onClick={() => void reconcile()} disabled={working} prefixIcon={working ? <Loader size="tiny" /> : undefined}>
-              Run reconciliation
+              {working ? t('help.reconcileRunning') : t('help.runReconcile')}
             </Button>
           }
         />
@@ -59,7 +65,7 @@ export const HelpPage = () => {
           <Box direction="vertical" gap="SP4">
             <SectionTabs />
             {error && (
-              <SectionHelper skin="danger" title="Couldn't load diagnostics" actionText="Retry" onAction={() => void load()}>
+              <SectionHelper skin="danger" title={t('help.loadErrorTitle')} actionText={t('help.retry')} onAction={() => void load()}>
                 {error}
               </SectionHelper>
             )}
@@ -71,40 +77,40 @@ export const HelpPage = () => {
                 <Card>
                   <StatisticsWidget
                     items={[
-                      { value: String(data.failedEvents), description: 'Failed order events' },
-                      { value: String(data.deadLetterEvents), description: 'Events that stopped retrying' },
-                      { value: String(data.pendingHolds), description: 'Active checkout holds' },
-                      { value: String(data.reservationsNeedingReview), description: 'Reservations needing review' },
-                      { value: `r${data.settingsRevision}`, description: 'Settings revision' },
+                      { value: String(data.failedEvents), description: t('help.failedEvents') },
+                      { value: String(data.deadLetterEvents), description: t('help.deadLetter') },
+                      { value: String(data.pendingHolds), description: t('help.pendingHolds') },
+                      { value: String(data.reservationsNeedingReview), description: t('help.reservationsReview') },
+                      { value: `r${data.settingsRevision}`, description: t('help.settingsRevision') },
                     ]}
                   />
                 </Card>
                 {!data.configured && (
-                  <SectionHelper skin="warning" title="Settings are not active">
-                    Settings have never been saved, or the stored settings no longer pass validation. Open Settings and save to fix this.
+                  <SectionHelper skin="warning" title={t('help.settingsNotActive')}>
+                    {t('help.settingsNotActiveInfo')}
                   </SectionHelper>
                 )}
                 <Card>
                   <Card.Header
-                    title="Last processed order event"
-                    subtitle={data.lastProcessedEvent ? `${data.lastProcessedEvent.eventType} · ${new Date(data.lastProcessedEvent.receivedAt).toLocaleString()}` : 'No order events received yet'}
+                    title={t('help.lastEvent')}
+                    subtitle={data.lastProcessedEvent ? `${data.lastProcessedEvent.eventType} · ${new Date(data.lastProcessedEvent.receivedAt).toLocaleString(locale)}` : t('help.noEvents')}
                   />
                 </Card>
                 <Card>
-                  <Card.Header title="Failed events" subtitle="Run reconciliation to retry them against the current order." />
+                  <Card.Header title={t('help.failedCardTitle')} subtitle={t('help.failedCardSubtitle')} />
                   <Card.Divider />
                   {data.failures.length === 0 ? (
-                    <Card.Content><Text size="small" secondary>No failures.</Text></Card.Content>
+                    <Card.Content><Text size="small" secondary>{t('help.noFailures')}</Text></Card.Content>
                   ) : (
                     <Table
                       data={data.failures}
                       columns={[
-                        { title: 'Event', render: (f) => f.eventType },
-                        { title: 'Order ID', render: (f) => f.orderId ?? '—' },
-                        { title: 'Status', render: (f) => f.processingStatus },
-                        { title: 'Attempts', render: (f) => String(f.attemptCount) },
-                        { title: 'Error code', render: (f) => f.lastErrorCode ?? '—' },
-                        { title: 'Received', render: (f) => new Date(f.receivedAt).toLocaleString() },
+                        { title: t('help.colEvent'), render: (f) => f.eventType },
+                        { title: t('help.colOrder'), render: (f) => f.orderId ?? '—' },
+                        { title: t('help.colStatus'), render: (f) => f.processingStatus },
+                        { title: t('help.colAttempts'), render: (f) => String(f.attemptCount) },
+                        { title: t('help.colError'), render: (f) => f.lastErrorCode ?? '—' },
+                        { title: t('help.colReceived'), render: (f) => new Date(f.receivedAt).toLocaleString(locale) },
                       ]}
                     >
                       <Table.Content />
@@ -112,14 +118,14 @@ export const HelpPage = () => {
                   )}
                 </Card>
                 <Card>
-                  <Card.Header title="How it works" />
+                  <Card.Header title={t('help.howItWorks')} />
                   <Card.Divider />
                   <Card.Content>
                     <Box direction="vertical" gap="SP2">
-                      <Text size="small">Customers pick a time in the delivery step of checkout. The time is held for a few minutes while they pay.</Text>
-                      <Text size="small">When Wix creates the order, the hold is confirmed against it. Canceled orders release their capacity.</Text>
-                      <Text size="small">If scheduling is required, checkout is blocked until a valid time is chosen.</Text>
-                      <Text size="small">Data: the app stores only scheduling records (no payment details). Uninstalling the app removes its collections from your site.</Text>
+                      <Text size="small">{t('help.howItWorks1')}</Text>
+                      <Text size="small">{t('help.howItWorks2')}</Text>
+                      <Text size="small">{t('help.howItWorks3')}</Text>
+                      <Text size="small">{t('help.howItWorks4')}</Text>
                     </Box>
                   </Card.Content>
                 </Card>

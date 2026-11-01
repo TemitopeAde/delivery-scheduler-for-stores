@@ -10,6 +10,7 @@ import { rulesForProducts } from './product-rules-repo';
 import { getReservation, insertReservation, type Reservation } from './reservations-repo';
 import { getScheduledOrder, saveScheduledOrder, type ScheduledOrder } from './scheduled-orders-repo';
 import { loadSettings } from './settings-repo';
+import { sendScheduleNotification } from './schedule-notifications';
 
 async function requireOrder(orderId: string): Promise<ScheduledOrder> {
   const order = await getScheduledOrder(orderId);
@@ -152,7 +153,15 @@ export async function patchOrder(
     order = { ...order, scheduleStatus: patch.scheduleStatus };
   }
   if (patch.merchantNotes !== undefined) order = { ...order, merchantNotes: patch.merchantNotes };
-  return saveScheduledOrder(order);
+  const saved = await saveScheduledOrder(order);
+  if (patch.reschedule) {
+    await sendScheduleNotification({
+      kind: 'scheduleChanged',
+      order: saved,
+      idempotencyKey: `schedule-changed:${saved.orderId}:${saved.reservationId ?? saved.lastSyncedAt ?? 'unknown'}`,
+    });
+  }
+  return saved;
 }
 
 export async function bulkSetStatus(

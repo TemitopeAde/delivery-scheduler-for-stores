@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, Dropdown, Input, Text } from '@wix/design-system';
 import { searchProducts, type ProductOption } from '../products-api';
+import { useDashboardI18n } from '../LanguageContext';
 
 /** Search the store's catalog (V1 or V3) and pick one product. */
 export const ProductPicker = ({
@@ -10,6 +11,7 @@ export const ProductPicker = ({
   value: ProductOption | null;
   onChange: (product: ProductOption | null) => void;
 }) => {
+  const { t } = useDashboardI18n();
   const [term, setTerm] = React.useState('');
   const [options, setOptions] = React.useState<ProductOption[]>([]);
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
@@ -70,14 +72,14 @@ export const ProductPicker = ({
   return (
     <Box direction="vertical" gap="SP2">
       <Input
-        placeholder="Search products by name"
+        placeholder={t('productRules.searchPlaceholder')}
         value={term}
         onChange={(e) => setTerm(e.target.value)}
         status={status === 'loading' ? 'loading' : undefined}
-        ariaLabel="Search products"
+        ariaLabel={t('productRules.searchPlaceholder')}
       />
       <Dropdown
-        placeholder={options.length ? 'Choose a product' : 'No products found'}
+        placeholder={options.length ? t('productRules.chooseProduct') : t('productRules.noProductsFound')}
         selectedId={value?.id}
         options={displayOptions.map((o) => ({ id: o.id, value: o.name }))}
         onSelect={(option) => {
@@ -87,11 +89,11 @@ export const ProductPicker = ({
       />
       {nextCursor && (
         <Button priority="secondary" onClick={loadMore} disabled={status === 'loading'}>
-          Load more products
+          {t('productRules.searchProduct')}
         </Button>
       )}
       {status === 'error' && (
-        <Text size="tiny" skin="error">Couldn't load products. Check that Wix Stores is installed.</Text>
+        <Text size="tiny" skin="error">{t('productRules.errorTitle')}</Text>
       )}
     </Box>
   );

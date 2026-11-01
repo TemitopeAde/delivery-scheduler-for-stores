@@ -8,17 +8,17 @@ import { useController, useForm } from '@wix/patterns/form';
 import { MERCHANT_SCHEDULE_STATUSES, type MerchantScheduleStatus, type Settings } from '../../../../../lib/schemas';
 import { api, type OrderDetail, type ScheduledOrder } from '../dashboard-api';
 import {
-  FULFILLMENT_STATUS_LABELS,
-  METHOD_LABELS,
-  ORDER_STATUS_LABELS,
-  PAYMENT_STATUS_LABELS,
-  SCHEDULE_STATUS_LABELS,
   SCHEDULE_STATUS_SKINS,
   displayDate,
-  label,
+  getMethodLabel,
+  getOrderStatusLabel,
+  getPaymentStatusLabel,
+  getFulfillmentStatusLabel,
+  getScheduleStatusLabel,
 } from '../labels';
 import { RescheduleFields, type RescheduleValue } from './RescheduleFields';
 import { StatusField } from './StatusField';
+import { useDashboardI18n } from '../LanguageContext';
 
 export type OrderFormFields = {
   scheduleStatus: MerchantScheduleStatus | '';
@@ -31,6 +31,7 @@ type Loaded = OrderDetail & { settings: Settings };
 export const OrderEntityPage = () => {
   const { id } = useParams<{ id?: string }>();
   const form = useForm<OrderFormFields>();
+  const { t } = useDashboardI18n();
 
   const state = useEntityPage<Loaded, OrderFormFields>({
     parentPath: '/orders',
@@ -60,28 +61,27 @@ export const OrderEntityPage = () => {
         patch.reschedule = { method: r.method, localDate: r.localDate, slotId: r.slotId };
       }
       if (Object.keys(patch).length === 0) return { updatedEntity: entity };
-      // Errors propagate so the page shows the save failure (e.g. slot full).
       const { order } = await api.patchOrder(id, patch);
       return { updatedEntity: { ...entity, order } };
     },
-    saveSuccessToast: 'Scheduling updated',
-    saveErrorToast: (err) => (err instanceof Error ? err.message : 'Failed to update the order'),
+    saveSuccessToast: t('orderDetail.saveSuccess'),
+    saveErrorToast: (err) => (err instanceof Error ? err.message : t('orderDetail.saveError')),
   });
 
   return (
     <EntityPage state={state}>
-      <EntityPage.Header title={{ text: 'Scheduled order' }} />
+      <EntityPage.Header title={{ text: t('orderDetail.title') }} />
       <EntityPage.Content>
         <EntityPage.MainContent>
           <Card>
-            <Card.Header title="Fulfilment" subtitle="Changes apply to the app's scheduling record only." />
+            <Card.Header title={t('orderDetail.fulfilmentTitle')} subtitle={t('orderDetail.fulfilmentSubtitle')} />
             <Card.Divider />
             <Card.Content>
               <FulfilmentFields />
             </Card.Content>
           </Card>
           <Card>
-            <Card.Header title="Reschedule" subtitle="Capacity for the new time is reserved before the old time is released." />
+            <Card.Header title={t('orderDetail.rescheduleTitle')} subtitle={t('orderDetail.rescheduleSubtitle')} />
             <Card.Divider />
             <Card.Content>
               <RescheduleSection />
@@ -90,7 +90,7 @@ export const OrderEntityPage = () => {
         </EntityPage.MainContent>
         <EntityPage.AdditionalContent>
           <Card>
-            <Card.Header title="Order" />
+            <Card.Header title={t('orderDetail.summaryTitle')} />
             <Card.Divider />
             <Card.Content>
               <OrderSummary />
@@ -104,13 +104,14 @@ export const OrderEntityPage = () => {
 
 const FulfilmentFields = () => {
   const page = useEntityPageContext<Loaded, OrderFormFields>();
+  const { t } = useDashboardI18n();
   const order = page.entity?.order;
   const editable = !!order?.localDate && order.scheduleStatus !== 'cancelled';
   const notes = useController({
     name: 'merchantNotes',
     control: page.form.control,
     defaultValue: order?.merchantNotes ?? '',
-    rules: { maxLength: { value: 2000, message: 'Keep notes under 2000 characters' } },
+    rules: { maxLength: { value: 2000, message: t('orderDetail.notesLimit') } },
   });
   return (
     <Box direction="vertical" gap="SP4">
@@ -124,7 +125,7 @@ const FulfilmentFields = () => {
         disabled={!editable}
       />
       <FormField
-        label="Merchant notes"
+        label={t('orderDetail.merchantNotes')}
         status={notes.fieldState.error ? 'error' : undefined}
         statusMessage={notes.fieldState.error?.message}
       >
@@ -136,10 +137,11 @@ const FulfilmentFields = () => {
 
 const RescheduleSection = () => {
   const page = useEntityPageContext<Loaded, OrderFormFields>();
+  const { t } = useDashboardI18n();
   if (!page.entity) return null;
   const { order, settings } = page.entity;
   if (order.scheduleStatus === 'cancelled') {
-    return <Text size="small" secondary>This order was canceled and can no longer be rescheduled.</Text>;
+    return <Text size="small" secondary>{t('orderDetail.rescheduleCancelled')}</Text>;
   }
   return <RescheduleFields control={page.form.control} order={order} settings={settings} />;
 };
@@ -155,6 +157,7 @@ function Row({ title, children }: { title: string; children: React.ReactNode }) 
 
 const OrderSummary = () => {
   const page = useEntityPageContext<Loaded, OrderFormFields>();
+  const { t, locale } = useDashboardI18n();
   const order: ScheduledOrder | undefined = page.entity?.order;
   if (!order) return null;
   return (
@@ -162,22 +165,22 @@ const OrderSummary = () => {
       <Box gap="SP2" verticalAlign="middle">
         <Text weight="bold">#{order.orderNumber || '—'}</Text>
         <Badge size="small" skin={SCHEDULE_STATUS_SKINS[order.scheduleStatus]}>
-          {SCHEDULE_STATUS_LABELS[order.scheduleStatus]}
+          {getScheduleStatusLabel(order.scheduleStatus, t)}
         </Badge>
       </Box>
-      <Row title="Scheduled for">
-        {order.localDate ? `${displayDate(order.localDate)} · ${order.slotLabelSnapshot || 'Any time'} (${order.timezone})` : 'Not scheduled'}
+      <Row title={t('orderDetail.scheduledFor')}>
+        {order.localDate ? `${displayDate(order.localDate, locale)} · ${order.slotLabelSnapshot || t('orderDetail.anyTime')} (${order.timezone})` : t('orderDetail.notScheduled')}
       </Row>
-      <Row title="Method">{order.fulfilmentMethod ? METHOD_LABELS[order.fulfilmentMethod] : '—'}</Row>
-      <Row title="Customer">{order.customerDisplayName || '—'}</Row>
-      <Row title="Items">{order.itemSummarySnapshot || '—'}</Row>
-      <Row title="Order / payment / fulfillment">
-        {`${label(ORDER_STATUS_LABELS, order.orderStatusSnapshot)} · ${label(PAYMENT_STATUS_LABELS, order.paymentStatusSnapshot)} · ${label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatusSnapshot)}`}
+      <Row title={t('orderDetail.method')}>{order.fulfilmentMethod ? getMethodLabel(order.fulfilmentMethod, t) : '—'}</Row>
+      <Row title={t('orderDetail.customer')}>{order.customerDisplayName || '—'}</Row>
+      <Row title={t('orderDetail.items')}>{order.itemSummarySnapshot || '—'}</Row>
+      <Row title={t('orderDetail.statusLine')}>
+        {`${getOrderStatusLabel(order.orderStatusSnapshot, t)} · ${getPaymentStatusLabel(order.paymentStatusSnapshot, t)} · ${getFulfillmentStatusLabel(order.fulfillmentStatusSnapshot, t)}`}
       </Row>
-      <Row title="Reservation">{page.entity?.reservation ? `${page.entity.reservation.status} · ${page.entity.reservation.reservationId}` : 'None'}</Row>
-      <Row title="Last synced">{order.lastSyncedAt ? new Date(order.lastSyncedAt).toLocaleString() : '—'}</Row>
+      <Row title={t('orderDetail.reservation')}>{page.entity?.reservation ? `${page.entity.reservation.status} · ${page.entity.reservation.reservationId}` : t('orderDetail.none')}</Row>
+      <Row title={t('orderDetail.lastSynced')}>{order.lastSyncedAt ? new Date(order.lastSyncedAt).toLocaleString(locale) : '—'}</Row>
       <TextButton onClick={() => dashboard.navigate(pages.orderDetails({ id: order.orderId }))}>
-        Open Wix order
+        {t('orderDetail.openWixOrder')}
       </TextButton>
     </Box>
   );

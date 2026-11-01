@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Accordion, Box, Button, Card } from '@wix/design-system';
 import { SettingsPage, useSettingsPage, useSettingsPageContext } from '@wix/patterns';
 import { useController, useForm } from '@wix/patterns/form';
@@ -14,13 +14,13 @@ import { NotificationsSection } from './NotificationsSection';
 import { PlanCard } from './PlanCard';
 import { ScheduleSection } from './ScheduleSection';
 import { WidgetPreview } from './WidgetPreview';
+import { useDashboardI18n } from '../LanguageContext';
 
 type Loaded = { settings: Settings; entitlement: Entitlement };
 type SettingsForm = { settings: SettingsInput };
 
 function toInput(settings: Settings): SettingsInput {
   const { schemaVersion: _v, settingsRevision: _r, configured, updatedAt: _u, ...input } = settings;
-  // First-time setup: suggest the merchant's own zone; it is saved only when they save.
   if (!configured && input.timezone === 'UTC') {
     return { ...input, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
   }
@@ -32,15 +32,28 @@ class SettingsValidationError extends Error {}
 export const SettingsPageView = () => {
   const form = useForm<SettingsForm>();
   const loaded = React.useRef<Loaded | null>(null);
+  const { t, setLocale } = useDashboardI18n();
+
+  useEffect(() => {
+    const handleLocaleChange = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      const newLocale = customEvent.detail;
+      if (newLocale) {
+        const current = form.getValues().settings;
+        if (current && current.translations.defaultLocale !== newLocale) {
+          form.setValue('settings.translations.defaultLocale', newLocale);
+        }
+      }
+    };
+    window.addEventListener('ds-locale-changed', handleLocaleChange);
+    return () => window.removeEventListener('ds-locale-changed', handleLocaleChange);
+  }, [form]);
 
   const state = useSettingsPage<Loaded, SettingsForm>({
     form,
     fetch: async () => {
       const result = await api.getSettings();
       loaded.current = result;
-      // SettingsPageState stores the fetched entity separately from the form.
-      // Explicitly hydrate the form so existing settings are not replaced by
-      // the controller's initial defaults on the first save.
       form.reset({ settings: toInput(result.settings) });
       return { settings: result };
     },
@@ -49,27 +62,30 @@ export const SettingsPageView = () => {
       if (!parsed.success) {
         const issue = parsed.error.issues[0];
         throw new SettingsValidationError(
-          issue ? `${issue.path.join(' › ') || 'Settings'}: ${issue.message}` : 'Some settings are invalid',
+          issue ? `${issue.path.join(' › ') || 'Settings'}: ${issue.message}` : t('settings.saveError'),
         );
       }
       const revision = loaded.current?.settings.settingsRevision ?? 0;
       const result = await api.saveSettings(revision, parsed.data);
       loaded.current = result;
       form.reset({ settings: toInput(result.settings) });
+      if (result.settings.translations.defaultLocale) {
+        void setLocale(result.settings.translations.defaultLocale as any);
+      }
     },
     onCancel: async () => {
       if (loaded.current) form.reset({ settings: toInput(loaded.current.settings) });
     },
-    saveSuccessToast: 'Settings saved',
+    saveSuccessToast: t('settings.saveSuccess'),
     saveErrorToast: (err, { retry }) => ({
-      message: err instanceof Error ? err.message : 'Failed to save the settings',
-      ...(err instanceof SettingsValidationError ? {} : { action: { text: 'Retry', onClick: retry } }),
+      message: err instanceof Error ? err.message : t('settings.saveError'),
+      ...(err instanceof SettingsValidationError ? {} : { action: { text: t('common.retry'), onClick: retry } }),
     }),
   });
 
   return (
     <SettingsPage state={state}>
-      <SettingsPage.Header title={{ text: 'Settings' }} subtitle={{ text: 'Delivery, pickup, capacity and how the checkout widget looks.' }} />
+      <SettingsPage.Header title={{ text: t('settings.title') }} subtitle={{ text: t('settings.subtitle') }} />
       <SettingsPage.Content>
         <SettingsPage.MainContent>
           <SectionTabs />
@@ -95,6 +111,7 @@ const useSettingsField = () => {
 
 const SettingsSections = () => {
   const { page, field } = useSettingsField();
+  const { t } = useDashboardI18n();
   const value = field.value;
   const plan = page.settings?.entitlement.plan ?? 'basic';
   const update = (patch: Partial<SettingsInput>) => field.onChange({ ...value, ...patch });
@@ -105,19 +122,19 @@ const SettingsSections = () => {
       <Accordion
         multiple
         items={[
-          { title: 'General', initiallyOpen: true, children: <GeneralSection {...props} /> },
-          { title: 'Schedule & capacity', children: <ScheduleSection {...props} /> },
-          { title: 'Closures & holidays', children: <ClosuresSection {...props} /> },
-          { title: 'Delivery', children: <MethodSection {...props} method="delivery" /> },
-          { title: 'Pickup', children: <MethodSection {...props} method="pickup" /> },
-          { title: 'Notifications', children: <NotificationsSection {...props} /> },
-          { title: 'Appearance & text', children: <AppearanceSection {...props} /> },
+          { title: t('settings.general'), initiallyOpen: true, children: <GeneralSection {...props} /> },
+          { title: t('settings.schedule'), children: <ScheduleSection {...props} /> },
+          { title: t('settings.closures'), children: <ClosuresSection {...props} /> },
+          { title: t('settings.delivery'), children: <MethodSection {...props} method="delivery" /> },
+          { title: t('settings.pickup'), children: <MethodSection {...props} method="pickup" /> },
+          { title: t('settings.notifications'), children: <NotificationsSection {...props} /> },
+          { title: t('settings.appearance'), children: <AppearanceSection {...props} /> },
           {
-            title: 'Reset',
-            subtitle: 'Restore every setting except the time zone to its default. Nothing is saved until you click Save.',
+            title: t('settings.reset'),
+            subtitle: t('settings.resetSubtitle'),
             children: (
               <Button priority="secondary" onClick={() => field.onChange({ ...DEFAULT_SETTINGS_INPUT, timezone: value.timezone })}>
-                Reset to defaults
+                {t('settings.resetButton')}
               </Button>
             ),
           },
@@ -129,17 +146,18 @@ const SettingsSections = () => {
 
 const PreviewAndPlan = () => {
   const { page, field } = useSettingsField();
+  const { t } = useDashboardI18n();
   return (
     <Box direction="vertical" gap="SP4">
       <Card>
-        <Card.Header title="Customer preview" />
+        <Card.Header title={t('settings.previewTitle')} />
         <Card.Divider />
         <Card.Content>
           <WidgetPreview value={field.value} />
         </Card.Content>
       </Card>
       <Card>
-        <Card.Header title="Plan" />
+        <Card.Header title={t('settings.planTitle')} />
         <Card.Divider />
         <Card.Content>
           <PlanCard entitlement={page.settings?.entitlement ?? null} />

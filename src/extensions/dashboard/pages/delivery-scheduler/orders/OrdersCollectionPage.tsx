@@ -20,17 +20,17 @@ import { usePatternsNavigate } from '@wix/patterns/router';
 import { Confirm, Download } from '@wix/wix-ui-icons-common/lazy';
 import { api, DashboardApiError, type OrdersFilters, type ScheduledOrder } from '../dashboard-api';
 import {
-  FULFILLMENT_STATUS_LABELS,
-  METHOD_LABELS,
-  ORDER_STATUS_LABELS,
-  PAYMENT_STATUS_LABELS,
-  SCHEDULE_STATUS_LABELS,
   SCHEDULE_STATUS_SKINS,
   displayDate,
-  label,
+  getMethodLabel,
+  getOrderStatusLabel,
+  getPaymentStatusLabel,
+  getFulfillmentStatusLabel,
+  getScheduleStatusLabel,
   pickedDateToLocal,
 } from '../labels';
 import { SectionTabs } from '../SectionTabs';
+import { useDashboardI18n } from '../LanguageContext';
 import {
   FULFILLMENT_STATUS_OPTIONS,
   ORDER_FILTERS,
@@ -59,15 +59,15 @@ function downloadCsv(csv: string) {
 
 export const OrdersCollectionPage = () => {
   const { navigateToEntityPage } = usePatternsNavigate<ScheduledOrder>();
+  const { t, locale } = useDashboardI18n();
   const [currentFilters, setCurrentFilters] = React.useState<OrdersFilters>({});
 
   const state = useTableCollection<ScheduledOrder, OrderFilters>({
     queryName: 'scheduled-orders',
     paginationMode: 'cursor',
     itemKey: (o) => o.orderId,
-    itemName: (o) => `Order #${o.orderNumber || o.orderId}`,
+    itemName: (o) => `${t('orders.colOrder')} #${o.orderNumber || o.orderId}`,
     filters: ORDER_FILTERS,
-    // Every declared filter and the search term reach the server-side query here.
     fetchData: async (query) => {
       const range = query.filters.scheduledDate;
       const filters: OrdersFilters = {
@@ -87,7 +87,7 @@ export const OrdersCollectionPage = () => {
         cursor: page.nextCursor === null ? undefined : String(page.nextCursor),
       };
     },
-    fetchErrorMessage: ({ err }) => (err instanceof Error ? err.message : 'Failed to load orders'),
+    fetchErrorMessage: ({ err }) => (err instanceof Error ? err.message : t('orders.errorTitle')),
     limit: PAGE_SIZE,
   });
 
@@ -107,8 +107,8 @@ export const OrdersCollectionPage = () => {
       dashboard.showToast({
         message:
           error instanceof DashboardApiError && error.code === 'PLAN_REQUIRED'
-            ? 'CSV export is a Pro feature.'
-            : 'Export failed. Please try again.',
+            ? t('plan.upgradeNote')
+            : t('orders.exportFailed'),
         type: 'error',
       });
     } finally {
@@ -120,23 +120,28 @@ export const OrdersCollectionPage = () => {
     try {
       const result = await api.bulkStatus(orders.map((o) => o.orderId), status);
       dashboard.showToast({
-        message: `${result.updated.length} updated${result.skipped.length ? `, ${result.skipped.length} skipped (unscheduled or cancelled)` : ''}.`,
+        message: t('orders.bulkUpdated', { count: result.updated.length }),
         type: result.skipped.length ? 'warning' : 'success',
       });
       void state.collection.refreshAllPages();
     } catch (error) {
       console.error('Bulk status failed', error);
-      dashboard.showToast({ message: 'Could not update the selected orders.', type: 'error' });
+      dashboard.showToast({ message: t('orders.bulkFailed'), type: 'error' });
     }
   };
 
   return (
     <CollectionPage>
       <CollectionPage.Header
-        title={{ text: 'Scheduled orders' }}
-        subtitle={{ text: 'Grouped by scheduled date and time. Changes here affect scheduling records only, never the Wix order.' }}
+        title={{ text: t('orders.title') }}
+        subtitle={{ text: t('orders.subtitle') }}
         secondaryActions={
-          <SecondaryActions label="Export CSV" prefixIcon={<Download />} onClick={exportCsv} disabled={exporting} />
+          <SecondaryActions
+            label={exporting ? t('orders.exporting') : t('orders.exportCsv')}
+            prefixIcon={<Download />}
+            onClick={exportCsv}
+            disabled={exporting}
+          />
         }
       />
       <CollectionPage.Content>
@@ -145,80 +150,79 @@ export const OrdersCollectionPage = () => {
           <Table
             state={state}
             horizontalScroll
-            search={<CollectionSearch placeholder="Search order number, order ID or customer" />}
+            search={<CollectionSearch placeholder={t('orders.searchPlaceholder')} />}
             filters={
               <CollectionToolbarFilters>
-                <DateRangeFilter filter={scheduledDateFilter} accordionItemProps={{ label: 'Scheduled date' }} />
-                <MultiSelectCheckboxFilter filter={methodFilter} collection={methodOptions} toolbarItemProps={{ label: 'Method' }} accordionItemProps={{ label: 'Method' }} />
-                <MultiSelectCheckboxFilter filter={scheduleStatusFilter} collection={scheduleOptions} toolbarItemProps={{ label: 'Schedule status' }} accordionItemProps={{ label: 'Schedule status' }} />
-                <MultiSelectCheckboxFilter filter={orderStatusFilter} collection={orderOptions} accordionItemProps={{ label: 'Order status' }} />
-                <MultiSelectCheckboxFilter filter={paymentStatusFilter} collection={paymentOptions} accordionItemProps={{ label: 'Payment status' }} />
-                <MultiSelectCheckboxFilter filter={fulfillmentStatusFilter} collection={fulfillmentOptions} accordionItemProps={{ label: 'Fulfillment status' }} />
+                <DateRangeFilter filter={scheduledDateFilter} accordionItemProps={{ label: t('orders.filterScheduledDate') }} />
+                <MultiSelectCheckboxFilter filter={methodFilter} collection={methodOptions} toolbarItemProps={{ label: t('orders.filterMethod') }} accordionItemProps={{ label: t('orders.filterMethod') }} />
+                <MultiSelectCheckboxFilter filter={scheduleStatusFilter} collection={scheduleOptions} toolbarItemProps={{ label: t('orders.filterScheduleStatus') }} accordionItemProps={{ label: t('orders.filterScheduleStatus') }} />
+                <MultiSelectCheckboxFilter filter={orderStatusFilter} collection={orderOptions} accordionItemProps={{ label: t('orders.filterOrderStatus') }} />
+                <MultiSelectCheckboxFilter filter={paymentStatusFilter} collection={paymentOptions} accordionItemProps={{ label: t('orders.filterPaymentStatus') }} />
+                <MultiSelectCheckboxFilter filter={fulfillmentStatusFilter} collection={fulfillmentOptions} accordionItemProps={{ label: t('orders.filterFulfillmentStatus') }} />
               </CollectionToolbarFilters>
             }
             bulkActionToolbar={({ selectedValues }) => (
               <MultiBulkActionToolbar
                 primaryActionItems={[
-                  { label: 'Mark ready', prefixIcon: <Confirm />, onClick: () => void markStatus(selectedValues, 'ready') },
-                  { label: 'Mark completed', prefixIcon: <Confirm />, onClick: () => void markStatus(selectedValues, 'completed') },
+                  { label: t('common.ready'), prefixIcon: <Confirm />, onClick: () => void markStatus(selectedValues, 'ready') },
+                  { label: t('common.completed'), prefixIcon: <Confirm />, onClick: () => void markStatus(selectedValues, 'completed') },
                 ]}
               />
             )}
             emptyState={
               <CollectionEmptyState
-                title="No scheduled orders yet"
-                subtitle="Orders appear here once customers choose a delivery or pickup time at checkout."
+                title={t('orders.emptyTitle')}
+                subtitle={t('orders.emptySubtitle')}
               />
             }
             noResultsState={
               <CollectionNoResultsState
-                title="No orders match"
-                subtitle="Search matches an exact order number or ID, or part of a customer name. Try clearing filters."
+                title={t('orders.noResultsTitle')}
+                subtitle={t('orders.noResultsSubtitle')}
               />
             }
             errorState={(err, { retry }) => (
               <CollectionErrorState
-                title="Couldn't load orders"
+                title={t('orders.errorTitle')}
                 subtitle={err instanceof Error ? err.message : String(err)}
-                action={{ text: 'Retry', onClick: retry }}
+                action={{ text: t('orders.retry'), onClick: retry }}
               />
             )}
             onRowClick={(order) => navigateToEntityPage({ path: `/orders/${order.orderId}`, entity: order })}
             columns={[
               {
                 id: 'schedule',
-                title: 'Scheduled for',
+                title: t('orderDetail.scheduledFor'),
                 width: '200px',
                 mobile: { column: 'first', order: 1 },
                 render: (o) =>
                   o.localDate ? (
                     <Box direction="vertical">
-                      <Text size="small" weight="bold">{displayDate(o.localDate)}</Text>
-                      <Text size="tiny" secondary>{o.slotLabelSnapshot || 'Any time'}</Text>
+                      <Text size="small" weight="bold">{displayDate(o.localDate, locale)}</Text>
+                      <Text size="tiny" secondary>{o.slotLabelSnapshot || t('orderDetail.anyTime')}</Text>
                     </Box>
                   ) : (
-                    <Text size="small" secondary>Not scheduled</Text>
+                    <Text size="small" secondary>{t('orderDetail.notScheduled')}</Text>
                   ),
               },
-              { id: 'number', title: 'Order', width: '90px', render: (o) => `#${o.orderNumber || '—'}` },
-              { id: 'customer', title: 'Customer', render: (o) => o.customerDisplayName || '—', mobile: { column: 'second' } },
-              { id: 'method', title: 'Method', width: '100px', render: (o) => (o.fulfilmentMethod ? METHOD_LABELS[o.fulfilmentMethod] : '—') },
+              { id: 'number', title: t('orders.colOrder'), width: '90px', render: (o) => `#${o.orderNumber || '—'}` },
+              { id: 'customer', title: t('orders.colCustomer'), render: (o) => o.customerDisplayName || '—', mobile: { column: 'second' } },
+              { id: 'method', title: t('orders.colMethod'), width: '100px', render: (o) => (o.fulfilmentMethod ? getMethodLabel(o.fulfilmentMethod, t) : '—') },
               {
                 id: 'status',
-                title: 'Schedule status',
+                title: t('orders.colStatus'),
                 width: '160px',
                 render: (o) => (
                   <Badge size="small" skin={SCHEDULE_STATUS_SKINS[o.scheduleStatus]}>
-                    {SCHEDULE_STATUS_LABELS[o.scheduleStatus]}
+                    {getScheduleStatusLabel(o.scheduleStatus, t)}
                   </Badge>
                 ),
               },
-              { id: 'items', title: 'Items', render: (o) => o.itemSummarySnapshot || '—' },
-              { id: 'order', title: 'Order status', width: '120px', render: (o) => label(ORDER_STATUS_LABELS, o.orderStatusSnapshot) },
-              { id: 'payment', title: 'Payment', width: '120px', render: (o) => label(PAYMENT_STATUS_LABELS, o.paymentStatusSnapshot) },
-              { id: 'fulfillment', title: 'Fulfillment', width: '130px', render: (o) => label(FULFILLMENT_STATUS_LABELS, o.fulfillmentStatusSnapshot) },
-              { id: 'notes', title: 'Notes', render: (o) => o.merchantNotes || '—' },
-              { id: 'source', title: 'Source', width: '100px', render: (o) => o.source || '—' },
+              { id: 'items', title: t('orderDetail.items'), render: (o) => o.itemSummarySnapshot || '—' },
+              { id: 'order', title: t('orders.filterOrderStatus'), width: '120px', render: (o) => getOrderStatusLabel(o.orderStatusSnapshot, t) },
+              { id: 'payment', title: t('orders.colPayment'), width: '120px', render: (o) => getPaymentStatusLabel(o.paymentStatusSnapshot, t) },
+              { id: 'fulfillment', title: t('orders.colFulfillment'), width: '130px', render: (o) => getFulfillmentStatusLabel(o.fulfillmentStatusSnapshot, t) },
+              { id: 'notes', title: t('orderDetail.merchantNotes'), render: (o) => o.merchantNotes || '—' },
             ]}
           />
         </Box>

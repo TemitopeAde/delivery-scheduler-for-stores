@@ -6,7 +6,7 @@ export default extensions.sitePlugin({
   marketData: {
     name: 'Delivery Scheduler',
     description: 'Lets customers choose a delivery or pickup date and time during checkout.',
-    logoUrl: '{{BASE_URL}}/delivery-scheduler-picker-logo.svg',
+    logoUrl: '{{BASE_URL}}/delivery-scheduler-app-icon.png',
   },
   // Legacy `placements` format: this builder version has no `placementsSlotIds`.
   // This delivery-step options slot exposes deliveryStepState and
