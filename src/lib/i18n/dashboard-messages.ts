@@ -5,6 +5,7 @@ export type DashboardMessageKey =
   | 'nav.overview'
   | 'nav.orders'
   | 'nav.productRules'
+  | 'nav.logs'
   | 'nav.settings'
   | 'nav.help'
   | 'nav.language'
@@ -56,6 +57,22 @@ export type DashboardMessageKey =
   // Offline banner
   | 'offline.title'
   | 'offline.description'
+  // Logs
+  | 'logs.title'
+  | 'logs.subtitle'
+  | 'logs.searchPlaceholder'
+  | 'logs.emptyTitle'
+  | 'logs.emptySubtitle'
+  | 'logs.noResultsTitle'
+  | 'logs.noResultsSubtitle'
+  | 'logs.errorTitle'
+  | 'logs.retry'
+  | 'logs.colDate'
+  | 'logs.colEvent'
+  | 'logs.colOutcome'
+  | 'logs.colReason'
+  | 'logs.colError'
+  | 'logs.colRequestId'
   | 'offline.cta'
   // Orders
   | 'orders.title'
@@ -350,9 +367,25 @@ export const DASHBOARD_EN: DashboardMessages = {
   'nav.overview': 'Overview',
   'nav.orders': 'Orders',
   'nav.productRules': 'Product rules',
+  'nav.logs': 'Logs',
   'nav.settings': 'Settings',
   'nav.help': 'Help & diagnostics',
   'nav.language': 'Language',
+  'logs.title': 'Checkout logs',
+  'logs.subtitle': 'Recent checkout validation results and errors.',
+  'logs.searchPlaceholder': 'Search logs by event, reason, or ID',
+  'logs.emptyTitle': 'No checkout logs yet',
+  'logs.emptySubtitle': 'Checkout validation results will appear here as customers use checkout.',
+  'logs.noResultsTitle': 'No matching logs',
+  'logs.noResultsSubtitle': 'Try another search term.',
+  'logs.errorTitle': 'Could not load logs',
+  'logs.retry': 'Retry',
+  'logs.colDate': 'Date and time',
+  'logs.colEvent': 'Event',
+  'logs.colOutcome': 'Outcome',
+  'logs.colReason': 'Reason',
+  'logs.colError': 'Error code',
+  'logs.colRequestId': 'Request ID',
   'overview.title': 'Delivery Scheduler',
   'overview.subtitle': "Today's fulfilment at a glance.",
   'overview.addToCheckout': 'Add to checkout',

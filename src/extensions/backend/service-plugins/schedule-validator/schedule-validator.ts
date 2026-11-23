@@ -1,4 +1,7 @@
 import { validations } from '@wix/ecom/service-plugins';
+import { auth } from '@wix/essentials';
+import { items as dataItems } from '@wix/data';
+import { COLLECTIONS } from '../../../../lib/constants';
 import { checkSelection } from '../../../../lib/engine/availability';
 import { resolveMessages, type MessageKey } from '../../../../lib/i18n/messages';
 import { storesItems } from '../../../../lib/server/checkout-context';
@@ -12,6 +15,38 @@ import {
 
 const NO_VIOLATIONS = { violations: [] };
 const TIMEOUT_MS = 4000;
+
+type CheckoutLog = {
+  operation: string;
+  outcome: 'success' | 'error';
+  reason: string;
+  requestId: string | null;
+  purchaseFlowId: string | null;
+  source: string | null;
+  reservationId?: string | null;
+  errorCode?: string | null;
+};
+
+function recordCheckoutLog(entry: CheckoutLog): void {
+  try {
+    const insert = auth.elevate(dataItems.insert);
+    void insert(COLLECTIONS.logs, {
+      ...entry,
+      createdAt: new Date(),
+    }).catch((error: unknown) => {
+      // Logging is best effort and must never affect the checkout response.
+      log.error('validator.log_write_failed', error, { requestId: entry.requestId });
+    });
+  } catch (error) {
+    // Elevation can fail synchronously; that must not affect the checkout response.
+    log.error('validator.log_write_failed', error, { requestId: entry.requestId });
+  }
+}
+
+function finish<T>(response: T, entry: CheckoutLog): T {
+  recordCheckoutLog(entry);
+  return response;
+}
 
 function blocking(ctx: SchedulingContext | null, languages: string[] | undefined, key: MessageKey) {
   const locale = languages?.[0] ?? ctx?.settings.translations.defaultLocale ?? 'en';
@@ -42,29 +77,42 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
 validations.provideHandlers({
   getValidationViolations: async ({ request, metadata }) => {
     const requestId = metadata.requestId ?? null;
-    const items = storesItems(request.validationInfo?.lineItems ?? []);
-    if (items.length === 0) return NO_VIOLATIONS;
-
+    const purchaseFlowId = request.sourceInfo?.purchaseFlowId ?? null;
+    const source = request.sourceInfo?.source ?? null;
+    let items: ReturnType<typeof storesItems> = [];
     let ctx: SchedulingContext | null = null;
     try {
+      items = storesItems(request.validationInfo?.lineItems ?? []);
+      if (items.length === 0) {
+        return finish(NO_VIOLATIONS, { operation: 'checkout.validation', outcome: 'success', reason: 'no_store_items', requestId, purchaseFlowId, source });
+      }
       ctx = await withTimeout(loadSchedulingContext(items));
-      if (!isSchedulingRequired(ctx, items)) return NO_VIOLATIONS;
+      if (!isSchedulingRequired(ctx, items)) {
+        return finish(NO_VIOLATIONS, { operation: 'checkout.validation', outcome: 'success', reason: 'scheduling_not_required', requestId, purchaseFlowId, source });
+      }
       // The plugin is placed in checkout; cart calls (if enabled later) only inform.
-      if (request.sourceInfo?.source === 'CART') return NO_VIOLATIONS;
+      if (source === 'CART') {
+        return finish(NO_VIOLATIONS, { operation: 'checkout.validation', outcome: 'success', reason: 'cart_validation_skipped', requestId, purchaseFlowId, source });
+      }
 
-      const purchaseFlowId = request.sourceInfo?.purchaseFlowId;
-      if (!purchaseFlowId) return blocking(ctx, metadata.languages, 'validation.unverified');
+      if (!purchaseFlowId) {
+        return finish(blocking(ctx, metadata.languages, 'validation.unverified'), { operation: 'checkout.validation', outcome: 'error', reason: 'purchase_flow_missing', requestId, purchaseFlowId, source });
+      }
 
       const reservation = await withTimeout(findLatestByPurchaseFlow(purchaseFlowId));
-      if (!reservation) return blocking(ctx, metadata.languages, 'validation.required');
+      if (!reservation) {
+        return finish(blocking(ctx, metadata.languages, 'validation.required'), { operation: 'checkout.validation', outcome: 'error', reason: 'reservation_missing', requestId, purchaseFlowId, source });
+      }
       if (reservation.status === 'needs_review') {
-        return blocking(ctx, metadata.languages, 'validation.unavailable');
+        return finish(blocking(ctx, metadata.languages, 'validation.unavailable'), { operation: 'checkout.validation', outcome: 'error', reason: 'reservation_needs_review', requestId, purchaseFlowId, source, reservationId: reservation.reservationId });
       }
       const now = new Date();
       const lapsed =
         reservation.status === 'expired' ||
         (reservation.status === 'held' && reservation.expiresAt !== null && reservation.expiresAt <= now);
-      if (lapsed) return blocking(ctx, metadata.languages, 'validation.expired');
+      if (lapsed) {
+        return finish(blocking(ctx, metadata.languages, 'validation.expired'), { operation: 'checkout.validation', outcome: 'error', reason: 'reservation_expired', requestId, purchaseFlowId, source, reservationId: reservation.reservationId });
+      }
 
       // The capacity lock is owned already, so only the rules are re-checked (cart
       // contents or settings may have changed since the hold was made).
@@ -84,12 +132,15 @@ validations.provideHandlers({
       // Notice and cut-off were satisfied when the hold was placed; a customer
       // lingering on the payment step must not be failed by the clock alone.
       const clockOnly = !check.ok && (check.reason === 'too_soon' || check.reason === 'cutoff');
-      if (!check.ok && !clockOnly) return blocking(ctx, metadata.languages, 'validation.unavailable');
+      if (!check.ok && !clockOnly) {
+        return finish(blocking(ctx, metadata.languages, 'validation.unavailable'), { operation: 'checkout.validation', outcome: 'error', reason: check.reason, requestId, purchaseFlowId, source, reservationId: reservation.reservationId });
+      }
 
       log.info('validator.ok', { requestId, reservationId: reservation.reservationId });
-      return NO_VIOLATIONS;
+      return finish(NO_VIOLATIONS, { operation: 'checkout.validation', outcome: 'success', reason: 'reservation_valid', requestId, purchaseFlowId, source, reservationId: reservation.reservationId });
     } catch (error) {
       log.error('validator.failed', error, { requestId });
+      recordCheckoutLog({ operation: 'checkout.validation', outcome: 'error', reason: 'validator_exception', requestId, purchaseFlowId, source, errorCode: log.errorCode(error) });
       // Fail closed only when we already know scheduling is required for this purchase.
       if (ctx && isSchedulingRequired(ctx, items)) {
         return blocking(ctx, metadata.languages, 'validation.unverified');

@@ -514,7 +514,7 @@ const DeliverySchedulerPicker = ({
     // Keep checkout blocked while a required scheduler is loading. Enabling
     // Continue before availability/hold resolution would allow an order to
     // bypass the required schedule.
-    const blocked = !!checkoutId && (!vm || (vm.payload.enabled && vm.payload.required && !vm.hold));
+    const blocked = !!checkoutId && (!vm || (vm.payload.required && !vm.hold));
     try {
       const continueControl = propsRef.current.disableContinueButton;
       if (typeof continueControl === 'function') {
@@ -550,7 +550,7 @@ const DeliverySchedulerPicker = ({
     html = loadError
       ? `<div class="ds"><div class="ds-alert" data-tone="error" role="alert">${messages['state.error']} <button type="button" class="ds-link" data-action="retry">${messages['state.retry']}</button></div></div>`
       : renderPlaceholder(messages, 'state.loading');
-  } else if (!vm.payload.enabled) {
+  } else if (!vm.payload.enabled && !vm.payload.required) {
     html = '';
   } else {
     html = renderWidget({

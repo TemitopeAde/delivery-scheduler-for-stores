@@ -199,8 +199,10 @@ export function renderWidget(vm: ViewModel): string {
 
   const availability = payload.availability;
   const noDates = availability !== null && !availability.days.some((d) => d.available);
+  const requiredButUnavailable = payload.required && !payload.enabled && !vm.hold;
   return shell(`${renderHeader(vm)}${renderMethods(vm)}
     ${vm.method && availability ? renderContext(vm) : ''}
+    ${requiredButUnavailable ? `<div class="ds-alert" data-tone="error" role="alert">${e(payload.messages['state.empty'])}</div>` : ''}
     ${noDates && vm.status === 'ready' ? `<div class="ds-alert" role="status">${e(payload.messages['state.empty'])}</div>` : ''}
     ${vm.method && availability && !noDates ? renderCalendar(vm) + renderSlots(vm) : ''}
     ${renderStatus(vm)}`);

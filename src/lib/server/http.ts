@@ -1,4 +1,5 @@
 import { auth } from '@wix/essentials';
+import { getSecret } from 'astro:env/server';
 import { z } from 'zod';
 import { AppError } from './errors';
 import { log } from './log';
@@ -53,7 +54,16 @@ export function handler(
   return async ({ request, params }) => {
     const requestId = crypto.randomUUID();
     try {
-      const token = await tokenInfo();
+      const developmentAccess = getSecret('WIX_ENVIRONMENT') === 'DEVELOPMENT';
+      const token = developmentAccess
+        ? {
+            active: true,
+            subjectType: audience === 'dashboard' ? 'USER' as const : 'VISITOR' as const,
+            subjectId: 'local-development',
+            siteId: 'local-development',
+            instanceId: 'local-development',
+          }
+        : await tokenInfo();
       const allowed =
         audience === 'dashboard'
           ? token.subjectType === 'USER'

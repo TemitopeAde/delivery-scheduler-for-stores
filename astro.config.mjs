@@ -10,6 +10,7 @@ export default defineConfig({
   integrations: [wix(), react()],
   env: {
     schema: {
+      WIX_ENVIRONMENT: envField.string({ context: 'server', access: 'secret', optional: true }),
       LIFECYCLE_SHEETS_WEBHOOK_URL: envField.string({ context: 'server', access: 'secret', optional: true }),
       LIFECYCLE_SHEETS_WEBHOOK_SECRET: envField.string({ context: 'server', access: 'secret', optional: true }),
     },

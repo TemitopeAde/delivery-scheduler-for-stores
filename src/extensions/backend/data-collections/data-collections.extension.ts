@@ -12,6 +12,8 @@ import eventLogCollection from './event-log';
 
 import slotLocksCollection from './slot-locks';
 
+import logsCollection from './logs';
+
 export default extensions.dataCollections({
   id: '94657c15-817f-4669-8ad7-a156d4812290',
   name: 'Data Collections',
@@ -21,6 +23,7 @@ export default extensions.dataCollections({
     reservationsCollection,
     scheduledOrdersCollection,
     eventLogCollection,
-    slotLocksCollection
+    slotLocksCollection,
+    logsCollection
   ],
 });

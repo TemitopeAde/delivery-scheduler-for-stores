@@ -9,6 +9,7 @@ import {
 import { IconThemeProvider } from '@wix/wix-ui-icons-common/core';
 import '@wix/design-system/styles.global.css';
 import '@wix/design-system/themes/odeditor.global.css';
+import './dashboard.css';
 
 const BUSINESS_MANAGER_DEFAULTS: WixDesignSystemDefaultProps = {
   Button: { size: 'small', skin: 'dark' },

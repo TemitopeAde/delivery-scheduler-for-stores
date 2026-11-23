@@ -12,6 +12,19 @@ export type Diagnostics = Awaited<ReturnType<typeof diagnostics>>;
 export type OrderDetail = Awaited<ReturnType<typeof orderDetail>>;
 export type { Entitlement, ScheduledOrder };
 
+export interface CheckoutLog {
+  id: string;
+  operation: string;
+  outcome: string;
+  reason: string;
+  requestId: string;
+  purchaseFlowId: string;
+  source: string;
+  reservationId: string;
+  errorCode: string;
+  createdAt: string;
+}
+
 export class DashboardApiError extends Error {
   constructor(
     message: string,
@@ -73,6 +86,12 @@ function ordersQuery(filters: OrdersFilters): Record<string, string> {
 export const api = {
   overview: () => request<Overview>('overview'),
   diagnostics: () => request<Diagnostics>('diagnostics'),
+  listLogs: (limit: number, cursor: number, search?: string) =>
+    request<{ logs: CheckoutLog[]; nextCursor: number | null }>('logs', undefined, {
+      limit: String(limit),
+      cursor: String(cursor),
+      search: search ?? '',
+    }),
   reconcile: () =>
     request<{ expiredHolds: number; retried: Array<{ orderId: string | null; status: string }> }>('reconcile', {
       method: 'POST',

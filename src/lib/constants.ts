@@ -7,6 +7,7 @@ export const COLLECTIONS = {
   reservations: `${APP_NAMESPACE}/reservations`,
   scheduledOrders: `${APP_NAMESPACE}/scheduled-orders`,
   eventLog: `${APP_NAMESPACE}/event-log`,
+  logs: `${APP_NAMESPACE}/logs`,
   slotLocks: `${APP_NAMESPACE}/slot-locks`,
 } as const;
 

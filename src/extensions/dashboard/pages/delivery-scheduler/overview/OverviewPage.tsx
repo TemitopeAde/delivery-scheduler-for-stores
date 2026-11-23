@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboard } from '@wix/dashboard';
-import { Box, Button, Card, Loader, Page, SectionHelper, StatisticsWidget, Table, Text } from '@wix/design-system';
-import { PageWrapper } from '@wix/patterns';
+import { Box, Loader, SectionHelper, Text } from '@wix/design-system';
+import { Button } from '../../../../../components/ui/button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../../../../components/ui/card';
 import { CHECKOUT_PLUGIN_PLACEMENT, SITE_PLUGIN_ID } from '../../../../../lib/constants';
 import { api, type Overview } from '../dashboard-api';
 import { getMethodLabel, displayDate } from '../labels';
@@ -46,22 +47,12 @@ export const OverviewPage = () => {
   };
 
   return (
-    <PageWrapper>
-      <Page>
-        <Page.Header
-          title={t('overview.title')}
-          subtitle={t('overview.subtitle')}
-          actionsBar={
-            data?.widgetPlacement !== 'placed' ? (
-              <Button onClick={() => void addToCheckout()} disabled={adding} prefixIcon={adding ? <Loader size="tiny" /> : undefined}>
-                {adding ? t('overview.addingToCheckout') : t('overview.addToCheckout')}
-              </Button>
-            ) : undefined
-          }
-        />
-        <Page.Content>
-          <Box direction="vertical" gap="SP4">
-            <SectionTabs />
+    <div className="scheduler-overview">
+      <header className="scheduler-heading">
+        <div><h1>{t('overview.title')}</h1><p>{t('overview.subtitle')}</p></div>
+        {data?.widgetPlacement !== 'placed' && <Button onClick={() => void addToCheckout()} disabled={adding}>{adding ? t('overview.addingToCheckout') : t('overview.addToCheckout')}</Button>}
+      </header>
+      <div className="scheduler-stack">
             {error && (
               <SectionHelper skin="danger" title={t('overview.loadError')} actionText={t('common.retry')} onAction={() => void load()}>
                 {error}
@@ -97,48 +88,36 @@ export const OverviewPage = () => {
                     {t('overview.attentionDesc', { needs: data.counts.needsReview, missing: data.counts.missingSchedule })}
                   </SectionHelper>
                 )}
+                <div className="scheduler-metrics">
+                  {[
+                    [data.counts.today, t('overview.todayWithDate', { date: displayDate(data.today, locale) })],
+                    [data.counts.upcoming, t('overview.next7Days')],
+                    [data.counts.delivery, t('overview.deliveries7Days')],
+                    [data.counts.pickup, t('overview.pickups7Days')],
+                    [data.counts.missingSchedule, t('overview.missingScheduleCount')],
+                  ].map(([value, label]) => <Card key={label}><CardHeader className="pb-2"><CardDescription>{label}</CardDescription></CardHeader><CardContent><div className="scheduler-metric">{value}</div></CardContent></Card>)}
+                </div>
                 <Card>
-                  <StatisticsWidget
-                    items={[
-                      { value: String(data.counts.today), description: t('overview.todayWithDate', { date: displayDate(data.today, locale) }) },
-                      { value: String(data.counts.upcoming), description: t('overview.next7Days') },
-                      { value: String(data.counts.delivery), description: t('overview.deliveries7Days') },
-                      { value: String(data.counts.pickup), description: t('overview.pickups7Days') },
-                      { value: String(data.counts.missingSchedule), description: t('overview.missingScheduleCount') },
-                    ]}
-                  />
-                </Card>
-                <Card>
-                  <Card.Header title={t('overview.slotsNearCapacity')} subtitle={t('overview.slotsNearCapacitySub', { timezone: data.timezone })} />
-                  <Card.Divider />
+                  <CardHeader><CardTitle>{t('overview.slotsNearCapacity')}</CardTitle><CardDescription>{t('overview.slotsNearCapacitySub', { timezone: data.timezone })}</CardDescription></CardHeader>
                   {data.nearCapacity.length === 0 ? (
-                    <Card.Content>
+                    <CardContent>
                       <Text size="small" secondary>{t('overview.noSlotsNearCapacity')}</Text>
-                    </Card.Content>
+                    </CardContent>
                   ) : (
-                    <Table
-                      data={data.nearCapacity}
-                      columns={[
-                        { title: t('overview.colDate'), render: (r) => displayDate(r.date, locale) },
-                        { title: t('overview.colSlot'), render: (r) => r.slotId },
-                        { title: t('overview.colMethod'), render: (r) => getMethodLabel(r.method, t) },
-                        { title: t('overview.colRemaining'), render: (r) => (r.remaining === 0 ? t('overview.full') : String(r.remaining)) },
-                      ]}
-                    >
-                      <Table.Content />
-                    </Table>
+                    <div className="overflow-x-auto"><table className="scheduler-table">
+                      <thead><tr>{['overview.colDate', 'overview.colSlot', 'overview.colMethod', 'overview.colRemaining'].map(key => <th key={key} scope="col">{t(key as 'overview.colDate')}</th>)}</tr></thead>
+                      <tbody>{data.nearCapacity.map((r, index) => <tr key={`${r.date}-${r.slotId}-${r.method}-${index}`}><td>{displayDate(r.date, locale)}</td><td>{r.slotId}</td><td>{getMethodLabel(r.method, t)}</td><td>{r.remaining === 0 ? t('overview.full') : r.remaining}</td></tr>)}</tbody>
+                    </table></div>
                   )}
                 </Card>
                 <Box gap="SP2">
                   <Button onClick={() => navigate('/orders')}>{t('overview.viewAllOrders')}</Button>
-                  <Button priority="secondary" onClick={() => void load()}>{t('overview.refresh')}</Button>
+                  <Button variant="outline" onClick={() => void load()}>{t('overview.refresh')}</Button>
                 </Box>
               </>
             )}
             <OfflineNotice />
-          </Box>
-        </Page.Content>
-      </Page>
-    </PageWrapper>
+      </div>
+    </div>
   );
 };
