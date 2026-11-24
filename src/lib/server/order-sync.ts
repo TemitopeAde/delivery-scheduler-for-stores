@@ -1,4 +1,7 @@
 import type { orders } from '@wix/ecom';
+import { orders as ordersApi } from '@wix/ecom';
+import { auth } from '@wix/essentials';
+import { APP_NAMESPACE } from '../constants';
 import { EVENT_MAX_ATTEMPTS } from '../constants';
 import { MERCHANT_SCHEDULE_STATUSES, type ScheduleStatus } from '../schemas';
 import { getLogEntry, logIdFor, saveLogEntry, type EventLogEntry, type ProcessingStatus } from './event-log-repo';
@@ -18,6 +21,42 @@ interface SyncOutcome {
 }
 
 const MERCHANT_OWNED = new Set<ScheduleStatus>(MERCHANT_SCHEDULE_STATUSES);
+const elevatedUpdateOrder = auth.elevate(ordersApi.updateOrder);
+
+/** Copies the confirmed schedule into the app's Wix Order schema plugin fields. */
+async function writeScheduleToWixOrder(order: orders.Order, schedule: ScheduledOrder): Promise<void> {
+  if (!schedule.fulfilmentMethod || !schedule.localDate) return;
+  // Wix does not allow updating pending or rejected orders. A later approval or
+  // payment event will run this sync again when the order can be updated.
+  if (order.status === 'PENDING' || order.status === 'REJECTED') return;
+
+  const extendedFields = order.extendedFields as
+    | { namespaces?: Record<string, Record<string, unknown>> }
+    | undefined;
+  const namespaces = extendedFields?.namespaces ?? {};
+  try {
+    await elevatedUpdateOrder(schedule.orderId, {
+      extendedFields: {
+        namespaces: {
+          ...namespaces,
+          [APP_NAMESPACE]: {
+            ...namespaces[APP_NAMESPACE],
+            deliverySchedulerMethod: schedule.fulfilmentMethod,
+            deliverySchedulerDate: schedule.localDate,
+            deliverySchedulerTime: schedule.slotLabelSnapshot,
+            deliverySchedulerTimezone: schedule.timezone,
+          },
+        },
+      },
+    });
+    log.info('order.schedule_fields_updated', { orderId: schedule.orderId });
+  } catch (error) {
+    // Order processing must remain successful if Wix has not yet published the
+    // app schema or its Manage Orders permission is missing. Later order events
+    // and the app's own scheduled-order record remain available for recovery.
+    log.error('order.schedule_fields_update_failed', error, { orderId: schedule.orderId });
+  }
+}
 
 function emptyRecord(orderId: string): ScheduledOrder {
   return {
@@ -89,7 +128,7 @@ async function syncOrder(order: orders.Order, orderId: string, now: Date): Promi
     existing && MERCHANT_OWNED.has(existing.scheduleStatus) ? existing.scheduleStatus : 'scheduled';
   const settings = await loadSettings();
 
-  await saveScheduledOrder({
+  const scheduledOrder = await saveScheduledOrder({
     ...(existing ?? emptyRecord(orderId)),
     ...snapshot,
     reservationId: reservation.reservationId,
@@ -103,6 +142,7 @@ async function syncOrder(order: orders.Order, orderId: string, now: Date): Promi
     scheduleStatus: needsReview ? 'needs_review' : settledStatus,
     lastSyncedAt: now.toISOString(),
   });
+  await writeScheduleToWixOrder(order, scheduledOrder);
   return { status: 'processed', reservationId: reservation.reservationId };
 }
 

@@ -61,10 +61,10 @@ function renderMethods(vm: ViewModel): string {
   const buttons = offered
     .map(
       (x) =>
-        `<button type="button" class="ds-btn" role="radio" aria-checked="${vm.method === x.method}" data-action="method" data-method="${x.method}">${e(m[`method.${x.method}`])}</button>`,
+        `<button type="button" class="ds-btn" aria-pressed="${vm.method === x.method}" data-action="method" data-method="${x.method}">${e(m[`method.${x.method}`])}</button>`,
     )
     .join('');
-  return `<fieldset><legend>${e(m['method.legend'])}</legend><div class="ds-row" role="radiogroup">${buttons}</div></fieldset>`;
+  return `<fieldset><legend>${e(m['method.legend'])}</legend><div class="ds-methods">${buttons}</div></fieldset>`;
 }
 
 function dayAriaLabel(vm: ViewModel, date: string, day: DayAvailability | undefined): string {
@@ -112,14 +112,14 @@ function renderCalendar(vm: ViewModel): string {
   const canPrev = vm.month > availability.today.slice(0, 7);
   const canNext = vm.month < availability.latestDate.slice(0, 7);
   const header = names.map((n) => `<th scope="col" abbr="${e(n.long)}">${e(n.short)}</th>`).join('');
-  return `<div class="ds-cal">
+  return `<section><h4 class="ds-section-label">${e(m['date.label'])}</h4><div class="ds-cal">
     <div class="ds-cal-head">
       <button type="button" class="ds-btn" data-action="prev-month" aria-label="${e(m['calendar.previousMonth'])}" ${canPrev ? '' : 'aria-disabled="true"'}>‹</button>
       <span class="ds-cal-title" id="ds-month">${e(formatMonth(vm.month, vm.payload.locale))}</span>
       <button type="button" class="ds-btn" data-action="next-month" aria-label="${e(m['calendar.nextMonth'])}" ${canNext ? '' : 'aria-disabled="true"'}>›</button>
     </div>
     <table class="ds-grid" role="grid" aria-labelledby="ds-month"><thead><tr>${header}</tr></thead><tbody>${rows.join('')}</tbody></table>
-  </div>`;
+  </div></section>`;
 }
 
 function renderSlot(vm: ViewModel, slot: SlotAvailability): string {
@@ -132,7 +132,7 @@ function renderSlot(vm: ViewModel, slot: SlotAvailability): string {
   } else if (vm.payload.showRemaining && slot.remaining !== null) {
     sub = format(m['slot.remaining'], { count: slot.remaining });
   }
-  return `<button type="button" class="ds-btn" role="radio" aria-checked="${selected}" aria-disabled="${!slot.available}" data-action="slot" data-slot="${e(slot.slotId)}">${e(slotLabel(vm, slot))}${sub ? `<span class="ds-slot-sub">${e(sub)}</span>` : ''}</button>`;
+  return `<button type="button" class="ds-btn" aria-pressed="${selected}" aria-disabled="${!slot.available}" data-action="slot" data-slot="${e(slot.slotId)}">${e(slotLabel(vm, slot))}${sub ? `<span class="ds-slot-sub">${e(sub)}</span>` : ''}</button>`;
 }
 
 function renderSlots(vm: ViewModel): string {
@@ -140,8 +140,8 @@ function renderSlots(vm: ViewModel): string {
   const day = vm.payload.availability?.days.find((d) => d.date === vm.selectedDate);
   if (!day) return '';
   const m = vm.payload.messages;
-  return `<fieldset><legend>${e(m['time.label'])} — ${e(formatDate(day.date, vm.payload.locale, vm.payload.dateStyle))}</legend>
-    <div class="ds-slots" role="radiogroup">${day.slots.map((s) => renderSlot(vm, s)).join('')}</div></fieldset>`;
+  return `<fieldset class="ds-slot-panel"><legend>${e(m['time.label'])}<span class="ds-slot-date">${e(formatDate(day.date, vm.payload.locale, vm.payload.dateStyle))}</span></legend>
+    <div class="ds-slots">${day.slots.map((s) => renderSlot(vm, s)).join('')}</div></fieldset>`;
 }
 
 function renderContext(vm: ViewModel): string {
@@ -154,13 +154,13 @@ function renderContext(vm: ViewModel): string {
     if (payload.pickup.instructions) lines.push(payload.pickup.instructions);
   }
   if (vm.method === 'delivery' && payload.deliveryNote) lines.push(payload.deliveryNote);
-  return lines.map((l) => `<p class="ds-muted">${e(l)}</p>`).join('');
+  return `<div class="ds-context">${lines.map((l) => `<p class="ds-muted">${e(l)}</p>`).join('')}</div>`;
 }
 
 function renderStatus(vm: ViewModel): string {
   const m = vm.payload.messages;
   if (vm.status === 'offline') return `<div class="ds-alert" role="status">${e(m['state.offline'])}</div>`;
-  if (vm.status === 'loading') return `<p class="ds-muted" role="status"><span class="ds-spinner" aria-hidden="true"></span>${e(m['state.loading'])}</p>`;
+  if (vm.status === 'loading') return `<div class="ds-loading-overlay" role="status" aria-label="${e(m['state.loading'])}"><span class="ds-spinner" aria-hidden="true"></span></div>`;
   if (vm.status === 'saving') return `<p class="ds-muted" role="status"><span class="ds-spinner" aria-hidden="true"></span>${e(m['state.saving'])}</p>`;
   if (vm.status === 'error' || vm.errorKey) {
     return `<div class="ds-alert" data-tone="error" role="alert">${e(m[vm.errorKey ?? 'state.error'])} <button type="button" class="ds-link" data-action="retry">${e(m['state.retry'])}</button></div>`;
@@ -179,19 +179,22 @@ function renderHeader(vm: ViewModel): string {
 function renderSummary(vm: ViewModel, hold: PublicHold, showChange: boolean): string {
   const m = vm.payload.messages;
   const removing = vm.status === 'saving';
-  return `<div class="ds-summary"><span>${e(holdTimeText(vm, hold))}</span><span class="ds-row">${
-    showChange ? `<button type="button" class="ds-link" data-action="change">${e(m['selection.change'])}</button>` : ''
-  }<button type="button" class="ds-btn" data-action="remove" aria-disabled="${removing}" aria-busy="${removing}">${
-    removing ? '<span class="ds-spinner" aria-hidden="true"></span>' : ''
-  }${e(m['selection.remove'])}</button></span></div>`;
+  return `<div class="ds-summary"><span class="ds-summary-copy"><span class="ds-check" aria-hidden="true">✓</span><span>${e(holdTimeText(vm, hold))}</span></span><span class="ds-row">${
+    showChange ? `<button type="button" class="ds-link" data-action="change" aria-haspopup="dialog">${e(m['selection.change'])}</button>` : ''
+  }<button type="button" class="ds-btn ds-icon" data-action="remove" aria-label="${e(m['selection.remove'])}" title="${e(m['selection.remove'])}" aria-disabled="${removing}" aria-busy="${removing}">${
+    removing ? '<span class="ds-spinner" aria-hidden="true"></span>' : '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>'
+  }</button></span></div>`;
 }
 
-export function renderWidget(vm: ViewModel): string {
+export function renderWidget(vm: ViewModel, launcher = false): string {
   const { payload } = vm;
   const dir = isRtl(payload.locale) ? 'rtl' : 'ltr';
   const shell = (body: string) =>
-    `<div class="ds ${payload.appearance.slotStyle === 'filled' ? 'ds-filled' : ''}" dir="${dir}" lang="${e(payload.locale)}" style="${themeVariables(payload.appearance, vm.brand)}"><div class="ds-inner">${body}</div></div>`;
+    `<div class="ds ${payload.appearance.slotStyle === 'filled' ? 'ds-filled' : ''} ${vm.status === 'loading' ? 'is-loading' : ''}" dir="${dir}" lang="${e(payload.locale)}" style="${themeVariables(payload.appearance, vm.brand)}"><div class="ds-inner">${body}</div></div>`;
 
+  if (launcher) {
+    return shell(`${vm.hold ? renderSummary(vm, vm.hold, true) : `<button type="button" class="ds-btn ds-open" data-action="open" aria-haspopup="dialog">${e(payload.messages['widget.title'])}</button>`}${renderStatus(vm)}`);
+  }
   if (vm.compact) return vm.hold ? shell(renderSummary(vm, vm.hold, false)) : '';
   if (vm.hold && !vm.editing) {
     return shell(`${renderHeader(vm)}${renderSummary(vm, vm.hold, true)}${renderContext(vm)}${renderStatus(vm)}`);
@@ -201,13 +204,13 @@ export function renderWidget(vm: ViewModel): string {
   const noDates = availability !== null && !availability.days.some((d) => d.available);
   const requiredButUnavailable = payload.required && !payload.enabled && !vm.hold;
   return shell(`${renderHeader(vm)}${renderMethods(vm)}
-    ${vm.method && availability ? renderContext(vm) : ''}
     ${requiredButUnavailable ? `<div class="ds-alert" data-tone="error" role="alert">${e(payload.messages['state.empty'])}</div>` : ''}
     ${noDates && vm.status === 'ready' ? `<div class="ds-alert" role="status">${e(payload.messages['state.empty'])}</div>` : ''}
-    ${vm.method && availability && !noDates ? renderCalendar(vm) + renderSlots(vm) : ''}
+    ${vm.method && availability && !noDates ? `<div class="ds-picker">${renderCalendar(vm)}${renderSlots(vm)}</div>` : ''}
+    ${vm.method && availability ? renderContext(vm) : ''}
     ${renderStatus(vm)}`);
 }
 
 export function renderPlaceholder(messages: Messages, text: MessageKey): string {
-  return `<div class="ds"><p class="ds-muted" role="status"><span class="ds-spinner" aria-hidden="true"></span>${e(messages[text])}</p></div>`;
+  return `<div class="ds ds-placeholder is-loading"><div class="ds-loading-overlay" role="status" aria-label="${e(messages[text])}"><span class="ds-spinner" aria-hidden="true"></span></div></div>`;
 }

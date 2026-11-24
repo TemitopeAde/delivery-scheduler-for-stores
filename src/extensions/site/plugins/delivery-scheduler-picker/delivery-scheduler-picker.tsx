@@ -3,15 +3,15 @@ import ReactDOM from 'react-dom/client';
 import { httpClient } from '@wix/essentials';
 import reactToWebComponent from 'react-to-webcomponent';
 import { DEFAULT_SETTINGS } from '../../../../lib/defaults';
-import { format, resolveMessages, type MessageKey } from '../../../../lib/i18n/messages';
+import { format, isRtl, resolveMessages, type MessageKey } from '../../../../lib/i18n/messages';
 import type { FulfilmentMethod } from '../../../../lib/schemas';
 import type { PublicHold } from '../../../../lib/server/holds';
 import type { WidgetPayload } from '../../../../lib/server/widget-config';
 import { addDays } from '../../../../lib/time/zoned';
-import { formatDate } from '../../../../widget/format';
+import { escapeHtml, formatDate } from '../../../../widget/format';
 import { renderPreviewHtml } from '../../../../widget/preview';
 import { renderPlaceholder, renderWidget, type ViewModel } from '../../../../widget/render';
-import { WIDGET_CSS, type SlotBrand } from '../../../../widget/styles';
+import { WIDGET_CSS, themeVariables, type SlotBrand } from '../../../../widget/styles';
 
 const ERROR_KEYS: Record<string, MessageKey> = {
   SLOT_FULL: 'error.slotFull',
@@ -82,6 +82,8 @@ const DeliverySchedulerPicker = ({
   const focusAfterRenderRef = useRef<string | null>(null);
   const lastUpdatedDateRef = useRef('');
   const contentRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const launcherRef = useRef<HTMLDivElement>(null);
   const liveRef = useRef<HTMLDivElement>(null);
 
   propsRef.current = {
@@ -276,6 +278,7 @@ const DeliverySchedulerPicker = ({
         announce(
           `${format(messages['selection.confirmedDateOnly'], { date: formatDate(localDate, current.payload.locale, 'full') })}. ${format(messages['selection.expiresSoon'], { minutes: current.payload.holdMinutes })}`,
         );
+        dialogRef.current?.close();
         focusAfterRenderRef.current = '[data-action="change"]';
         try {
           const refresh = propsRef.current.onRefreshCheckout;
@@ -406,7 +409,9 @@ const DeliverySchedulerPicker = ({
         case 'next-month':
           changeMonth(1);
           return;
+        case 'open':
         case 'change':
+          dialogRef.current?.showModal();
           update({ editing: true });
           focusAfterRenderRef.current = '.ds-day[tabindex="0"]';
           return;
@@ -455,6 +460,7 @@ const DeliverySchedulerPicker = ({
     lastUpdatedDateRef.current = '';
     setLoadError(false);
     setVm(null);
+    dialogRef.current?.close();
     if (checkoutId) void load(null);
   }, [checkoutId, load]);
 
@@ -514,7 +520,11 @@ const DeliverySchedulerPicker = ({
     // Keep checkout blocked while a required scheduler is loading. Enabling
     // Continue before availability/hold resolution would allow an order to
     // bypass the required schedule.
-    const blocked = !!checkoutId && (!vm || (vm.payload.required && !vm.hold));
+    const blocked =
+      !!checkoutId &&
+      (!vm ||
+        (vm.payload.enabled && !vm.selectedDate) ||
+        (vm.payload.required && !vm.hold));
     try {
       const continueControl = propsRef.current.disableContinueButton;
       if (typeof continueControl === 'function') {
@@ -533,22 +543,19 @@ const DeliverySchedulerPicker = ({
   useEffect(() => {
     const selector = focusAfterRenderRef.current;
     if (!selector) return;
-    contentRef.current?.querySelector<HTMLElement>(selector)?.focus();
+    const root = dialogRef.current?.open ? contentRef.current : launcherRef.current;
+    root?.querySelector<HTMLElement>(selector)?.focus();
     focusAfterRenderRef.current = null;
   }, [vm, loadError, deliveryStepState]);
 
   const activeLocale = vm?.payload.locale ?? siteLocale() ?? DEFAULT_SETTINGS.translations.defaultLocale;
   const messages = vm?.payload.messages ?? resolveMessages(activeLocale, {});
-  // Keep the picker visible until the customer has selected a hold. Once a
-  // hold exists, Wix may render the delivery step in summary mode and the
-  // compact confirmation is appropriate.
-  const compact = !!vm && deliveryStepState === 'summary' && !!vm.hold;
   let html: string;
   if (!checkoutId) {
     html = renderPreviewHtml(DEFAULT_SETTINGS, activeLocale);
   } else if (!vm) {
     html = loadError
-      ? `<div class="ds"><div class="ds-alert" data-tone="error" role="alert">${messages['state.error']} <button type="button" class="ds-link" data-action="retry">${messages['state.retry']}</button></div></div>`
+      ? `<div class="ds"><div class="ds-alert" data-tone="error" role="alert">${escapeHtml(messages['state.error'])} <button type="button" class="ds-link" data-action="retry">${escapeHtml(messages['state.retry'])}</button></div></div>`
       : renderPlaceholder(messages, 'state.loading');
   } else if (!vm.payload.enabled && !vm.payload.required) {
     html = '';
@@ -556,14 +563,39 @@ const DeliverySchedulerPicker = ({
     html = renderWidget({
       ...vm,
       brand: isBrand(slotBrand) ? slotBrand : null,
-      compact,
+      compact: false,
     });
   }
 
   return (
     <>
       <style>{WIDGET_CSS}</style>
-      <div ref={contentRef} onClick={handleClick} onKeyDown={handleKeyDown} dangerouslySetInnerHTML={{ __html: html }} />
+      {html && (
+        <>
+          <div
+            ref={launcherRef}
+            onClick={handleClick}
+            dangerouslySetInnerHTML={{ __html: vm ? renderWidget({ ...vm, brand: isBrand(slotBrand) ? slotBrand : null }, true) : `<div class="ds"><button type="button" class="ds-btn ds-open" data-action="open" aria-haspopup="dialog">${escapeHtml(messages['widget.title'])}</button></div>` }}
+          />
+          <dialog
+            ref={dialogRef}
+            className="ds-dialog"
+            style={Object.fromEntries(themeVariables(vm?.payload.appearance ?? DEFAULT_SETTINGS.appearance, isBrand(slotBrand) ? slotBrand : null).split(';').map((entry) => {
+              const separator = entry.indexOf(':');
+              return [entry.slice(0, separator), entry.slice(separator + 1)];
+            })) as React.CSSProperties}
+            aria-label={messages['widget.title']}
+            dir={isRtl(activeLocale) ? 'rtl' : 'ltr'}
+            lang={activeLocale}
+            onClose={() => launcherRef.current?.querySelector<HTMLButtonElement>('[data-action="change"], [data-action="open"]')?.focus()}
+          >
+            <button type="button" className="ds-btn ds-icon ds-close" aria-label={messages['widget.close']} onClick={() => dialogRef.current?.close()}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+            </button>
+            <div ref={contentRef} onClick={handleClick} onKeyDown={handleKeyDown} dangerouslySetInnerHTML={{ __html: html }} />
+          </dialog>
+        </>
+      )}
       <div ref={liveRef} className="ds-sr" aria-live="polite" />
     </>
   );
